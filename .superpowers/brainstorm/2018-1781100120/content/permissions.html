@@ -1,0 +1,101 @@
+<h2>权限模型设计</h2>
+<p class="subtitle">家族管理员制 — 三级角色 + 路由中间件保护</p>
+
+<div class="section">
+  <h3>三级角色矩阵</h3>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:14px">
+      <thead>
+        <tr style="background:var(--bg-secondary)">
+          <th style="padding:12px 16px;text-align:left;border-bottom:2px solid var(--border-color)"></th>
+          <th style="padding:12px 16px;text-align:center;border-bottom:2px solid var(--border-color)">👑 管理员</th>
+          <th style="padding:12px 16px;text-align:center;border-bottom:2px solid var(--border-color)">✏️ 编辑者</th>
+          <th style="padding:12px 16px;text-align:center;border-bottom:2px solid var(--border-color)">👁️ 查看者</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:12px 16px;border-bottom:1px solid var(--border-color)">浏览家谱树</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#10b981">✓</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#10b981">✓</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#10b981">✓</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 16px;border-bottom:1px solid var(--border-color)">查看人物详情</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#10b981">✓</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#10b981">✓</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#10b981">✓</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 16px;border-bottom:1px solid var(--border-color)">新增/编辑人物</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#10b981">✓</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#10b981">✓</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#ef4444">✗</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 16px;border-bottom:1px solid var(--border-color)">删除人物</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#10b981">✓</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#ef4444">✗</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#ef4444">✗</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 16px;border-bottom:1px solid var(--border-color)">管理成员/角色</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#10b981">✓</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#ef4444">✗</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#ef4444">✗</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 16px;border-bottom:1px solid var(--border-color)">修改家族设置</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#10b981">✓</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#ef4444">✗</td>
+          <td style="text-align:center;padding:12px;border-bottom:1px solid var(--border-color);color:#ef4444">✗</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 16px">删除家族</td>
+          <td style="text-align:center;padding:12px;color:#10b981">✓</td>
+          <td style="text-align:center;padding:12px;color:#ef4444">✗</td>
+          <td style="text-align:center;padding:12px;color:#ef4444">✗</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section">
+  <h3>权限执行流程</h3>
+  <div style="background:var(--bg-secondary);padding:20px;border-radius:8px">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;font-size:14px">
+      <span style="background:#3b82f6;color:#fff;padding:8px 16px;border-radius:6px">用户请求</span>
+      <span style="color:var(--text-secondary)">→</span>
+      <span style="background:#6366f1;color:#fff;padding:8px 16px;border-radius:6px">Next Auth 中间件<br><small>验证登录态</small></span>
+      <span style="color:var(--text-secondary)">→</span>
+      <span style="background:#8b5cf6;color:#fff;padding:8px 16px;border-radius:6px">家族上下文中间件<br><small>提取 familyId + 角色</small></span>
+      <span style="color:var(--text-secondary)">→</span>
+      <span style="background:#10b981;color:#fff;padding:8px 16px;border-radius:6px">权限守卫<br><small>角色 → 操作检查</small></span>
+      <span style="color:var(--text-secondary)">→</span>
+      <span style="background:#f59e0b;color:#fff;padding:8px 16px;border-radius:6px">API / 页面</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>关键设计决策</h3>
+  <div style="display:flex;flex-direction:column;gap:12px">
+
+    <div style="background:var(--bg-secondary);padding:16px;border-radius:8px;border-left:3px solid #3b82f6">
+      <strong>家族创建者即首位管理员</strong>
+      <p style="margin:4px 0 0;color:var(--text-secondary)">创建家族时自动以 admin 角色加入 FamilyMember 表。创始人不可被降级或移除。</p>
+    </div>
+
+    <div style="background:var(--bg-secondary);padding:16px;border-radius:8px;border-left:3px solid #6366f1">
+      <strong>多层防护</strong>
+      <p style="margin:4px 0 0;color:var(--text-secondary)">前端 UI 隐藏操作按钮 + API 层角色校验 + 数据库查询带 family_id 过滤。三层防护，任一失败都不泄漏数据。</p>
+    </div>
+
+    <div style="background:var(--bg-secondary);padding:16px;border-radius:8px;border-left:3px solid #10b981">
+      <strong>邀请制加入</strong>
+      <p style="margin:4px 0 0;color:var(--text-secondary)">管理员生成邀请链接（带过期时间），新用户通过链接注册后自动加入家族，默认角色为 viewer。</p>
+    </div>
+
+  </div>
+</div>

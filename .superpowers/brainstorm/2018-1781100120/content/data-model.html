@@ -1,0 +1,84 @@
+<h2>数据模型设计</h2>
+<p class="subtitle">核心实体关系 — 支撑多家族、基础家谱信息</p>
+
+<div class="section">
+  <h3>实体关系图</h3>
+  <div style="background:var(--bg-secondary);padding:24px;border-radius:12px;font-family:monospace;font-size:14px;line-height:1.8">
+
+    <div style="text-align:center;margin-bottom:24px;color:var(--text-secondary)">
+      核心表：5 张 | 多租户入口为 Family
+    </div>
+
+    <!-- User -->
+    <div style="background:#3b82f6;color:#fff;padding:12px 16px;border-radius:8px;margin-bottom:8px">
+      <strong>👤 User</strong>（用户表）
+      <div style="font-size:12px;opacity:0.9;margin-top:4px">id · email · name · password_hash · created_at</div>
+    </div>
+
+    <div style="text-align:center;color:var(--text-secondary);margin:4px 0">↕ FamilyMember（多对多 + 角色）</div>
+
+    <!-- Family -->
+    <div style="background:#8b5cf6;color:#fff;padding:12px 16px;border-radius:8px;margin-bottom:8px">
+      <strong>🏠 Family</strong>（家族表）
+      <div style="font-size:12px;opacity:0.9;margin-top:4px">id · name · description · created_by → User · created_at</div>
+    </div>
+
+    <div style="text-align:center;color:var(--text-secondary);margin:4px 0">↓ 1:N（一个家族有多个人物）</div>
+
+    <!-- Person -->
+    <div style="background:#10b981;color:#fff;padding:12px 16px;border-radius:8px;margin-bottom:8px">
+      <strong>🧑 Person</strong>（人物表）⭐ 核心
+      <div style="font-size:12px;opacity:0.9;margin-top:4px">id · family_id → Family · name · gender · birth_date · death_date · bio · created_at · updated_at</div>
+    </div>
+
+    <div style="text-align:center;color:var(--text-secondary);margin:4px 0">↕</div>
+
+    <!-- Relationship -->
+    <div style="background:#f59e0b;color:#fff;padding:12px 16px;border-radius:8px;margin-bottom:8px">
+      <strong>💍 Relationship</strong>（关系表）
+      <div style="font-size:12px;opacity:0.9;margin-top:4px">id · family_id → Family · type（配偶/子女）· person_a → Person · person_b → Person · sort_order · created_at</div>
+    </div>
+
+    <div style="text-align:center;color:var(--text-secondary);margin:4px 0">↕</div>
+
+    <!-- FamilyMember -->
+    <div style="background:#ef4444;color:#fff;padding:12px 16px;border-radius:8px">
+      <strong>👥 FamilyMember</strong>（家族成员角色表）
+      <div style="font-size:12px;opacity:0.9;margin-top:4px">id · user_id → User · family_id → Family · role（admin/editor/viewer）· joined_at</div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h3>关系类型说明</h3>
+  <div style="display:flex;flex-direction:column;gap:12px">
+
+    <div style="background:var(--bg-secondary);padding:16px;border-radius:8px;border-left:3px solid #f59e0b">
+      <strong>配偶关系 (spouse)</strong>
+      <p style="margin:4px 0 0;color:var(--text-secondary)">双向关系。person_a 和 person_b 互为配偶。通过 type='spouse' 标识。</p>
+    </div>
+
+    <div style="background:var(--bg-secondary);padding:16px;border-radius:8px;border-left:3px solid #10b981">
+      <strong>子女关系 (child)</strong>
+      <p style="margin:4px 0 0;color:var(--text-secondary)">单向关系。person_a 是父/母，person_b 是子女。通过配偶关系可推断双亲。</p>
+    </div>
+
+    <div style="background:var(--bg-secondary);padding:16px;border-radius:8px;border-left:3px solid #6366f1">
+      <strong>排序字段</strong>
+      <p style="margin:4px 0 0;color:var(--text-secondary)">子女之间通过 sort_order 控制显示顺序（长幼有序），配偶之间按结婚时间排序。</p>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h3>多租户数据隔离策略</h3>
+  <div style="background:var(--bg-secondary);padding:16px;border-radius:8px">
+    <p style="margin:0;color:var(--text-secondary)">
+      每张业务表（Person、Relationship）都带 <code>family_id</code> 外键。
+      API 层通过中间件从当前登录用户和访问的家族上下文中提取 <code>family_id</code>，
+      所有数据库查询自动带 <code>WHERE family_id = ?</code> 条件，确保跨家族数据绝不泄漏。
+    </p>
+  </div>
+</div>
