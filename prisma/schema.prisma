@@ -1,14 +1,48 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  persons      Person[]
+
+  @@map("users")
+}
+
+model Person {
+  id         String         @id @default(cuid())
+  name       String
+  gender     String // "male" | "female"
+  birthDate  String?        @map("birth_date")
+  deathDate  String?        @map("death_date")
+  bio        String?
+  createdAt  DateTime       @default(now()) @map("created_at")
+  updatedAt  DateTime       @updatedAt @map("updated_at")
+  createdBy  String         @map("created_by")
+  creator    User           @relation(fields: [createdBy], references: [id])
+  relationsA Relationship[] @relation("PersonA")
+  relationsB Relationship[] @relation("PersonB")
+
+  @@map("persons")
+}
+
+model Relationship {
+  id        String   @id @default(cuid())
+  type      String // "spouse" | "child"
+  personAId String   @map("person_a_id")
+  personBId String   @map("person_b_id")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  personA   Person   @relation("PersonA", fields: [personAId], references: [id], onDelete: Cascade)
+  personB   Person   @relation("PersonB", fields: [personBId], references: [id], onDelete: Cascade)
+
+  @@map("relationships")
 }
