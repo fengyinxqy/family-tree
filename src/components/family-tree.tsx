@@ -115,7 +115,7 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
       </div>
 
       {/* Toolbar overlay */}
-      <div className="absolute left-4 top-4 z-10 flex items-center gap-2">
+      <div className="absolute left-4 top-4 z-50 flex items-center gap-2">
         {/* Add person button */}
         <button
           onClick={() => setPersonFormOpen(true)}
@@ -166,7 +166,7 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
 
       {/* Empty state */}
       {persons.length === 0 && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center">
+        <div className="absolute inset-0 z-50 flex items-center justify-center">
           <div className="flex flex-col items-center gap-4 text-center">
             <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-amber-100 to-amber-200 shadow-xl shadow-amber-200/30 dark:from-amber-900/30 dark:to-amber-800/20 dark:shadow-amber-900/10">
               <svg
