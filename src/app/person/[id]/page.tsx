@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DeleteButton } from "./delete-button";
+import { AddRelationButton } from "./add-relation-button";
 
 interface PersonDetailPageProps {
   params: Promise<{ id: string }>;
@@ -223,6 +224,7 @@ export default async function PersonDetailPage({
                 编辑
               </Button>
             </Link>
+            <AddRelationButton personId={person.id} />
             <DeleteButton personId={person.id} personName={person.name} />
           </div>
         </div>
