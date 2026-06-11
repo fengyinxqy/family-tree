@@ -44,12 +44,19 @@ export function LoginForm() {
     setServerError(null);
 
     try {
-      await signIn("credentials", {
+      const result = await signIn("credentials", {
         email: values.email,
         password: values.password,
-        redirect: true,
-        callbackUrl: "/tree",
+        redirect: false,
       });
+
+      if (result?.error) {
+        setServerError("邮箱或密码错误");
+        return;
+      }
+
+      router.refresh();
+      router.push("/tree");
     } catch {
       setServerError("网络错误，请稍后重试");
     }
