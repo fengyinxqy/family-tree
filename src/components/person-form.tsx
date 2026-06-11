@@ -106,7 +106,9 @@ function DeceasedFields({ form }: { form: UseFormReturn<PersonFormValues> }) {
           id="deceased"
           checked={deceased}
           onCheckedChange={(checked) => {
-            if (!checked) {
+            if (checked) {
+              form.setValue("deathDate", "");
+            } else {
               form.setValue("deathDate", null);
             }
           }}
