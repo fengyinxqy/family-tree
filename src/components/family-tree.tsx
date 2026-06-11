@@ -68,7 +68,9 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
         id: e.id,
         source: e.source,
         target: e.target,
-        type: "smoothstep",
+        sourceHandle: e.sourceHandle,
+        targetHandle: e.targetHandle,
+        type: isSpouse ? "straight" : "smoothstep",
         animated: false,
         label: edgeLabel,
         labelStyle: {

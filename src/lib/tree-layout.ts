@@ -4,6 +4,7 @@ const NODE_W = 180;
 const NODE_H = 80;
 const H_GAP = 60;
 const V_GAP = 120;
+const SPOUSE_GAP = 100;
 
 interface LayoutResult {
   nodes: TreeNode[];
@@ -125,10 +126,17 @@ function buildEdges(
             ((r.personAId === p.id && r.personBId === spId) ||
              (r.personAId === spId && r.personBId === p.id))
         );
+        // 男方 source(右) → 女方 target(左)
+        const pMale = p.gender === "male";
+        const spMale = persons.find((x) => x.id === spId)?.gender === "male";
+        const maleId = pMale ? p.id : spId;
+        const femaleId = pMale ? spId : p.id;
         edges.push({
           id: `spouse-${pairKey}`,
-          source: p.id,
-          target: spId,
+          source: maleId,
+          target: femaleId,
+          sourceHandle: "right",
+          targetHandle: "left",
           type: "spouse",
           label: rel?.label ?? null,
         });
@@ -158,6 +166,7 @@ function buildEdges(
  * Distribute nodes on the x-axis within each level, respecting spouse adjacency.
  */
 function distributePositions(
+  persons: PersonData[],
   levels: Map<string, number>,
   spouseMap: Map<string, string[]>,
   childrenMap: Map<string, string[]>,
@@ -207,15 +216,22 @@ function distributePositions(
     let startX = -totalWidth / 2;
 
     for (const group of orderedGroups) {
-      // Within each group, place spouses side by side
-      const groupWidth = group.length * NODE_W + (group.length - 1) * H_GAP / 2;
+      // 配偶组：男方左，女方右，间距 SPOUSE_GAP
+      const sortedGroup = [...group].sort((a, b) => {
+        const pa = persons.find((x: PersonData) => x.id === a);
+        const pb = persons.find((x: PersonData) => x.id === b);
+        const aMale = pa?.gender === "male";
+        const bMale = pb?.gender === "male";
+        return aMale ? -1 : bMale ? 1 : 0;
+      });
+      const gap = sortedGroup.length > 1 ? SPOUSE_GAP : 0;
+      const groupWidth = sortedGroup.length * NODE_W + (sortedGroup.length - 1) * gap;
       let groupStartX = startX + (NODE_W + H_GAP - groupWidth) / 2;
 
-      for (const nodeId of group) {
+      for (const nodeId of sortedGroup) {
         positionedInLevel.add(nodeId);
 
         if (isHorizontal) {
-          // Horizontal: swap axes (x becomes vertical, y becomes horizontal)
           positions.set(nodeId, {
             x: level * (NODE_H + V_GAP),
             y: groupStartX + NODE_W / 2,
@@ -226,9 +242,9 @@ function distributePositions(
             y: level * (NODE_H + V_GAP),
           });
         }
-        groupStartX += NODE_W + H_GAP / 2;
+        groupStartX += NODE_W + gap;
       }
-      startX += NODE_W + H_GAP;
+      startX += groupWidth + H_GAP;
     }
   }
 
@@ -317,7 +333,7 @@ export function layoutVertical(
   const { spouseMap, childrenMap, parentMap } = buildMaps(persons, relationships);
   const rootIds = findRoots(persons, parentMap);
   const levels = assignLevels(persons, childrenMap, spouseMap, rootIds);
-  const positions = distributePositions(levels, spouseMap, childrenMap, parentMap, false);
+  const positions = distributePositions(persons, levels, spouseMap, childrenMap, parentMap, false);
   const nodes = buildNodes(persons, positions, spouseMap, childrenMap, parentMap);
   const edges = buildEdges(persons, spouseMap, childrenMap, relationships);
 
@@ -336,7 +352,7 @@ export function layoutHorizontal(
   const { spouseMap, childrenMap, parentMap } = buildMaps(persons, relationships);
   const rootIds = findRoots(persons, parentMap);
   const levels = assignLevels(persons, childrenMap, spouseMap, rootIds);
-  const positions = distributePositions(levels, spouseMap, childrenMap, parentMap, true);
+  const positions = distributePositions(persons, levels, spouseMap, childrenMap, parentMap, true);
   const nodes = buildNodes(persons, positions, spouseMap, childrenMap, parentMap);
   const edges = buildEdges(persons, spouseMap, childrenMap, relationships);
 
