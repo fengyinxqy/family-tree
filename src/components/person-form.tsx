@@ -9,6 +9,7 @@ import { Loader2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/date-picker";
 import {
   Form,
   FormControl,
@@ -165,11 +166,10 @@ export function PersonFormFields({
                 <FormItem>
                   <FormLabel className="text-sm font-medium">出生日期</FormLabel>
                   <FormControl>
-                    <Input
-                      type="date"
-                      className="h-10"
-                      value={field.value ?? ""}
-                      onChange={(e) => field.onChange(e.target.value || null)}
+                    <DatePicker
+                      value={field.value ?? null}
+                      onChange={(v) => field.onChange(v)}
+                      placeholder="选择或输入日期"
                     />
                   </FormControl>
                   <FormMessage />
@@ -184,11 +184,10 @@ export function PersonFormFields({
                 <FormItem>
                   <FormLabel className="text-sm font-medium">逝世日期</FormLabel>
                   <FormControl>
-                    <Input
-                      type="date"
-                      className="h-10"
-                      value={field.value ?? ""}
-                      onChange={(e) => field.onChange(e.target.value || null)}
+                    <DatePicker
+                      value={field.value ?? null}
+                      onChange={(v) => field.onChange(v)}
+                      placeholder="选择或输入日期"
                     />
                   </FormControl>
                   <FormMessage />
