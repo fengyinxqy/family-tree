@@ -63,22 +63,26 @@ function PersonNodeComponent({ data, selected }: NodeProps) {
 
       {/* Connection handles */}
       <Handle
+        id="top"
         type="target"
         position={Position.Top}
         className="!bg-amber-400 !border-2 !border-white dark:!border-zinc-800 !w-3 !h-3 !top-[-6px] transition-transform hover:!scale-125"
       />
       <Handle
+        id="bottom"
         type="source"
         position={Position.Bottom}
         className="!bg-amber-400 !border-2 !border-white dark:!border-zinc-800 !w-3 !h-3 !bottom-[-6px] transition-transform hover:!scale-125"
       />
       <Handle
-        type="source"
+        id="left"
+        type="target"
         position={Position.Left}
         className="!bg-amber-400 !border-2 !border-white dark:!border-zinc-800 !w-3 !h-3 !left-[-6px] transition-transform hover:!scale-125"
       />
       <Handle
-        type="target"
+        id="right"
+        type="source"
         position={Position.Right}
         className="!bg-amber-400 !border-2 !border-white dark:!border-zinc-800 !w-3 !h-3 !right-[-6px] transition-transform hover:!scale-125"
       />
