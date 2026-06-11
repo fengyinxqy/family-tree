@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { DeleteButton } from "./delete-button";
 import { AddRelationButton } from "./add-relation-button";
+import { DeleteRelationButton } from "./delete-relation-button";
 
 interface PersonDetailPageProps {
   params: Promise<{ id: string }>;
@@ -44,23 +45,24 @@ export default async function PersonDetailPage({
   }
 
   // Combine and categorize relationships
-  const spouses: { id: string; name: string }[] = [];
-  const parents: { id: string; name: string }[] = [];
-  const children: { id: string; name: string }[] = [];
+  interface RelationEntry { personId: string; name: string; relationId: string; label: string | null }
+  const spouses: RelationEntry[] = [];
+  const parents: RelationEntry[] = [];
+  const children: RelationEntry[] = [];
 
   for (const rel of person.relationsA) {
     if (rel.type === "spouse") {
-      spouses.push({ id: rel.personB.id, name: rel.personB.name });
+      spouses.push({ personId: rel.personB.id, name: rel.personB.name, relationId: rel.id, label: rel.label });
     } else if (rel.type === "child") {
-      children.push({ id: rel.personB.id, name: rel.personB.name });
+      children.push({ personId: rel.personB.id, name: rel.personB.name, relationId: rel.id, label: rel.label });
     }
   }
 
   for (const rel of person.relationsB) {
     if (rel.type === "spouse") {
-      spouses.push({ id: rel.personA.id, name: rel.personA.name });
+      spouses.push({ personId: rel.personA.id, name: rel.personA.name, relationId: rel.id, label: rel.label });
     } else if (rel.type === "child") {
-      parents.push({ id: rel.personA.id, name: rel.personA.name });
+      parents.push({ personId: rel.personA.id, name: rel.personA.name, relationId: rel.id, label: rel.label });
     }
   }
 
@@ -143,14 +145,24 @@ export default async function PersonDetailPage({
                 </h2>
                 <div className="space-y-1.5">
                   {spouses.map((spouse) => (
-                    <Link
-                      key={spouse.id}
-                      href={`/person/${spouse.id}`}
-                      className="flex items-center justify-between rounded-lg border border-border/60 bg-card px-4 py-2.5 text-sm transition-colors hover:bg-amber-50/50 hover:border-amber-200/60 dark:hover:bg-amber-900/10 dark:hover:border-amber-800/30"
+                    <div
+                      key={spouse.relationId}
+                      className="flex items-center gap-2 rounded-lg border border-border/60 bg-card px-4 py-2.5 text-sm transition-colors hover:bg-amber-50/50 hover:border-amber-200/60 dark:hover:bg-amber-900/10 dark:hover:border-amber-800/30"
                     >
-                      <span className="font-medium">{spouse.name}</span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </Link>
+                      <Link
+                        href={`/person/${spouse.personId}`}
+                        className="flex-1 flex items-center justify-between"
+                      >
+                        <span className="font-medium">
+                          {spouse.name}
+                          {spouse.label && (
+                            <span className="ml-1.5 text-xs text-muted-foreground">({spouse.label})</span>
+                          )}
+                        </span>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </Link>
+                      <DeleteRelationButton relationId={spouse.relationId} />
+                    </div>
                   ))}
                 </div>
               </div>
@@ -165,14 +177,24 @@ export default async function PersonDetailPage({
                 </h2>
                 <div className="space-y-1.5">
                   {parents.map((parent) => (
-                    <Link
-                      key={parent.id}
-                      href={`/person/${parent.id}`}
-                      className="flex items-center justify-between rounded-lg border border-border/60 bg-card px-4 py-2.5 text-sm transition-colors hover:bg-emerald-50/50 hover:border-emerald-200/60 dark:hover:bg-emerald-900/10 dark:hover:border-emerald-800/30"
+                    <div
+                      key={parent.relationId}
+                      className="flex items-center gap-2 rounded-lg border border-border/60 bg-card px-4 py-2.5 text-sm transition-colors hover:bg-emerald-50/50 hover:border-emerald-200/60 dark:hover:bg-emerald-900/10 dark:hover:border-emerald-800/30"
                     >
-                      <span className="font-medium">{parent.name}</span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </Link>
+                      <Link
+                        href={`/person/${parent.personId}`}
+                        className="flex-1 flex items-center justify-between"
+                      >
+                        <span className="font-medium">
+                          {parent.name}
+                          {parent.label && (
+                            <span className="ml-1.5 text-xs text-muted-foreground">({parent.label})</span>
+                          )}
+                        </span>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </Link>
+                      <DeleteRelationButton relationId={parent.relationId} />
+                    </div>
                   ))}
                 </div>
               </div>
@@ -187,14 +209,24 @@ export default async function PersonDetailPage({
                 </h2>
                 <div className="space-y-1.5">
                   {children.map((child) => (
-                    <Link
-                      key={child.id}
-                      href={`/person/${child.id}`}
-                      className="flex items-center justify-between rounded-lg border border-border/60 bg-card px-4 py-2.5 text-sm transition-colors hover:bg-sky-50/50 hover:border-sky-200/60 dark:hover:bg-sky-900/10 dark:hover:border-sky-800/30"
+                    <div
+                      key={child.relationId}
+                      className="flex items-center gap-2 rounded-lg border border-border/60 bg-card px-4 py-2.5 text-sm transition-colors hover:bg-sky-50/50 hover:border-sky-200/60 dark:hover:bg-sky-900/10 dark:hover:border-sky-800/30"
                     >
-                      <span className="font-medium">{child.name}</span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </Link>
+                      <Link
+                        href={`/person/${child.personId}`}
+                        className="flex-1 flex items-center justify-between"
+                      >
+                        <span className="font-medium">
+                          {child.name}
+                          {child.label && (
+                            <span className="ml-1.5 text-xs text-muted-foreground">({child.label})</span>
+                          )}
+                        </span>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </Link>
+                      <DeleteRelationButton relationId={child.relationId} />
+                    </div>
                   ))}
                 </div>
               </div>

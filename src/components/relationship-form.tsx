@@ -251,13 +251,13 @@ export function RelationshipForm({ open, onClose, currentPersonId }: Relationshi
                       加载中...
                     </span>
                   ) : (
-                    <SelectValue
-                      placeholder={
-                        filteredPersons.length === 0
+                    <SelectValue>
+                      {targetPersonId
+                        ? persons.find((p) => p.id === targetPersonId)?.name || targetPersonId
+                        : filteredPersons.length === 0
                           ? "暂无可选人物"
-                          : `选择${relationType === "spouse" ? "配偶" : "子女"}`
-                      }
-                    />
+                          : `选择${relationType === "spouse" ? "配偶" : "子女"}`}
+                    </SelectValue>
                   )}
                 </SelectTrigger>
                 <SelectContent>
