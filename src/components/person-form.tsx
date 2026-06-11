@@ -141,7 +141,9 @@ export function PersonFormFields({
                     onValueChange={(value) => field.onChange(value)}
                   >
                     <SelectTrigger className="h-10 w-full">
-                      <SelectValue placeholder="请选择性别" />
+                      <SelectValue>
+                        {field.value === "male" ? "男" : field.value === "female" ? "女" : "请选择性别"}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="male">男</SelectItem>

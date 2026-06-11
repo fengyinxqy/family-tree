@@ -155,7 +155,9 @@ export function RelationshipForm({ open, onClose, currentPersonId }: Relationshi
                 }}
               >
                 <SelectTrigger className="h-10 w-full">
-                  <SelectValue placeholder="选择关系类型" />
+                  <SelectValue>
+                    {relationType === "spouse" ? "配偶" : "子女"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="spouse">配偶</SelectItem>
