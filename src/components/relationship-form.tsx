@@ -95,6 +95,7 @@ interface RelationshipFormProps {
 export function RelationshipForm({ open, onClose, currentPersonId }: RelationshipFormProps) {
   const router = useRouter();
   const [persons, setPersons] = useState<PersonData[]>([]);
+  const [currentGender, setCurrentGender] = useState<string>("male");
   const [loadingPersons, setLoadingPersons] = useState(false);
   const [relationType, setRelationType] = useState<RelationType>("spouse");
   const [targetPersonId, setTargetPersonId] = useState<string>("");
@@ -113,6 +114,8 @@ export function RelationshipForm({ open, onClose, currentPersonId }: Relationshi
         const res = await fetch("/api/persons");
         if (!res.ok) throw new Error("加载人物列表失败");
         const data: PersonData[] = await res.json();
+        const self = data.find((p) => p.id === currentPersonId);
+        if (self) setCurrentGender(self.gender);
         setPersons(data.filter((p) => p.id !== currentPersonId));
       } catch {
         setError("加载人物列表失败");
@@ -177,9 +180,12 @@ export function RelationshipForm({ open, onClose, currentPersonId }: Relationshi
     }
   }
 
-  const filteredPersons = relationType === "child"
-    ? persons.filter((p) => p.gender === "male" || p.gender === "female")
-    : persons;
+  const filteredPersons = persons.filter((p) => {
+    if (relationType === "spouse") {
+      return p.gender !== currentGender;
+    }
+    return true;
+  });
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
