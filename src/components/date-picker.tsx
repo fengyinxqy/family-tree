@@ -4,7 +4,6 @@ import { useState } from "react";
 import { format, parseISO, isValid } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { CalendarIcon, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -38,30 +37,28 @@ export function DatePicker({ value, onChange, placeholder = "选择日期" }: Da
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger>
-        <Button
-          variant="outline"
-          className={cn(
-            "h-10 w-full justify-start gap-2 text-left font-normal",
-            !value && "text-muted-foreground",
-          )}
-        >
-          <CalendarIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-          {value ? (
-            <span>{displayText}</span>
-          ) : (
-            <span className="text-muted-foreground">{placeholder}</span>
-          )}
-          {value && (
-            <X
-              className="ml-auto h-4 w-4 shrink-0 text-muted-foreground hover:text-foreground"
-              onClick={(e: React.MouseEvent) => {
-                e.stopPropagation();
-                onChange(null);
-              }}
-            />
-          )}
-        </Button>
+      <PopoverTrigger
+        className={cn(
+          "flex h-10 w-full items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground",
+          !value && "text-muted-foreground",
+        )}
+      >
+        <CalendarIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+        {value ? (
+          <span>{displayText}</span>
+        ) : (
+          <span className="text-muted-foreground">{placeholder}</span>
+        )}
+        {value && (
+          <X
+            className="ml-auto h-4 w-4 shrink-0 text-muted-foreground hover:text-foreground"
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onChange(null);
+            }}
+          />
+        )}
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
