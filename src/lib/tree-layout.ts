@@ -211,12 +211,10 @@ function distributePositions(
       orderedGroups.push([id]);
     }
 
-    // Distribute groups evenly across the level
-    const totalWidth = orderedGroups.length * NODE_W + (orderedGroups.length - 1) * H_GAP;
-    let startX = -totalWidth / 2;
-
+    // 先计算每个组的实际宽度
+    const groupWidths: number[] = [];
+    let totalWidth = 0;
     for (const group of orderedGroups) {
-      // 配偶组：男方左，女方右，间距 SPOUSE_GAP
       const sortedGroup = [...group].sort((a, b) => {
         const pa = persons.find((x: PersonData) => x.id === a);
         const pb = persons.find((x: PersonData) => x.id === b);
@@ -225,8 +223,25 @@ function distributePositions(
         return aMale ? -1 : bMale ? 1 : 0;
       });
       const gap = sortedGroup.length > 1 ? SPOUSE_GAP : 0;
-      const groupWidth = sortedGroup.length * NODE_W + (sortedGroup.length - 1) * gap;
-      let groupStartX = startX + (NODE_W + H_GAP - groupWidth) / 2;
+      const w = sortedGroup.length * NODE_W + (sortedGroup.length - 1) * gap;
+      groupWidths.push(w);
+      totalWidth += w;
+    }
+    totalWidth += (orderedGroups.length - 1) * H_GAP;
+    let startX = -totalWidth / 2;
+
+    for (let gi = 0; gi < orderedGroups.length; gi++) {
+      const group = orderedGroups[gi];
+      const groupWidth = groupWidths[gi];
+      const sortedGroup = [...group].sort((a, b) => {
+        const pa = persons.find((x: PersonData) => x.id === a);
+        const pb = persons.find((x: PersonData) => x.id === b);
+        const aMale = pa?.gender === "male";
+        const bMale = pb?.gender === "male";
+        return aMale ? -1 : bMale ? 1 : 0;
+      });
+      const gap = sortedGroup.length > 1 ? SPOUSE_GAP : 0;
+      let groupStartX = startX;
 
       for (const nodeId of sortedGroup) {
         positionedInLevel.add(nodeId);
