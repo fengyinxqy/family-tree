@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, type UseFormReturn } from "react-hook-form";
+import { useForm, useWatch, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/date-picker";
 import {
   Form,
@@ -94,6 +95,52 @@ interface PersonFormFieldsProps {
   serverError: string | null;
 }
 
+function DeceasedFields({ form }: { form: UseFormReturn<PersonFormValues> }) {
+  const deathDate = useWatch({ control: form.control, name: "deathDate" });
+  const deceased = deathDate !== null && deathDate !== undefined;
+
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="deceased"
+          checked={deceased}
+          onCheckedChange={(checked) => {
+            if (!checked) {
+              form.setValue("deathDate", null);
+            }
+          }}
+        />
+        <label
+          htmlFor="deceased"
+          className="text-sm font-medium leading-none cursor-pointer select-none"
+        >
+          是否已故
+        </label>
+      </div>
+      {deceased && (
+        <FormField
+          control={form.control}
+          name="deathDate"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-sm font-medium">逝世日期</FormLabel>
+              <FormControl>
+                <DatePicker
+                  value={field.value ?? null}
+                  onChange={(v) => field.onChange(v)}
+                  placeholder="选择或输入日期"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
+    </>
+  );
+}
+
 export function PersonFormFields({
   form,
   isSubmitting,
@@ -177,23 +224,7 @@ export function PersonFormFields({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="deathDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">逝世日期</FormLabel>
-                  <FormControl>
-                    <DatePicker
-                      value={field.value ?? null}
-                      onChange={(v) => field.onChange(v)}
-                      placeholder="选择或输入日期"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <DeceasedFields form={form} />
           </div>
 
           {/* Bio field */}
