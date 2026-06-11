@@ -66,6 +66,9 @@ export function DatePicker({ value, onChange, placeholder = "选择日期" }: Da
           selected={date}
           onSelect={handleSelect}
           locale={zhCN}
+          captionLayout="dropdown"
+          startMonth={new Date(1800, 0)}
+          endMonth={new Date()}
         />
       </PopoverContent>
     </Popover>
