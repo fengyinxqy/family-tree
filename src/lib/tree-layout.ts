@@ -317,13 +317,17 @@ function buildNodes(
   const nodes: TreeNode[] = [];
 
   for (const p of persons) {
-    const pos = positions.get(p.id);
-    if (!pos) continue;
+    const pos = positions.get(p.id) || { x: 0, y: 0 };
+
+    // 优先使用已保存的位置
+    const finalPos = p.posX != null && p.posY != null
+      ? { x: p.posX, y: p.posY }
+      : pos;
 
     nodes.push({
       id: p.id,
       type: "person",
-      position: pos,
+      position: finalPos,
       data: {
         ...p,
         spouseIds: spouseMap.get(p.id) || [],

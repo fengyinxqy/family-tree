@@ -29,6 +29,8 @@ export default function RelationshipsPage() {
       birthDate: data.birthDate,
       deathDate: data.deathDate,
       bio: data.bio,
+      posX: data.posX ?? null,
+      posY: data.posY ?? null,
       createdAt: data.createdAt,
     });
     setLoading(false);

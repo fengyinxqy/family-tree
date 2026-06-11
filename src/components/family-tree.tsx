@@ -223,9 +223,16 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
         className="bg-transparent"
-        nodesDraggable={false}
+        nodesDraggable
         nodesConnectable={false}
         elementsSelectable={true}
+        onNodeDragStop={async (_event, node) => {
+          await fetch(`/api/persons/${node.id}/position`, {
+            method: "PATCH",
+            body: JSON.stringify({ x: node.position.x, y: node.position.y }),
+            headers: { "Content-Type": "application/json" },
+          });
+        }}
       >
         <Background
           gap={24}

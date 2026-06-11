@@ -30,6 +30,8 @@ export default async function EditPersonPage({ params }: EditPersonPageProps) {
     birthDate: person.birthDate,
     deathDate: person.deathDate,
     bio: person.bio,
+    posX: person.posX ?? null,
+    posY: person.posY ?? null,
     createdAt: person.createdAt.toISOString(),
   };
 

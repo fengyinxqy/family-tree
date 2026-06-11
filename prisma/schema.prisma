@@ -24,6 +24,8 @@ model Person {
   birthDate  String?        @map("birth_date")
   deathDate  String?        @map("death_date")
   bio        String?
+  posX       Float?         @map("pos_x")
+  posY       Float?         @map("pos_y")
   createdAt  DateTime       @default(now()) @map("created_at")
   updatedAt  DateTime       @updatedAt @map("updated_at")
   createdBy  String         @map("created_by")

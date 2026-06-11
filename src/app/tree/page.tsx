@@ -30,6 +30,8 @@ export default async function TreePage() {
     birthDate: p.birthDate,
     deathDate: p.deathDate,
     bio: p.bio,
+    posX: p.posX,
+    posY: p.posY,
     createdAt: p.createdAt.toISOString(),
   }));
 

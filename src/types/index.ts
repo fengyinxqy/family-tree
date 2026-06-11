@@ -5,6 +5,8 @@ export interface PersonData {
   birthDate: string | null;
   deathDate: string | null;
   bio: string | null;
+  posX: number | null;
+  posY: number | null;
   createdAt: string;
 }
 
