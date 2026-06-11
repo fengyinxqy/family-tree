@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Heart, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -24,6 +25,67 @@ import type { PersonData } from "@/types";
 
 type RelationType = "spouse" | "child";
 
+const RANK_PRESETS = ["长", "次", "三", "幼", "独"];
+
+function ChildLabelField({
+  persons,
+  targetPersonId,
+  value,
+  onChange,
+}: {
+  persons: PersonData[];
+  targetPersonId: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [isCustom, setIsCustom] = useState(false);
+  const target = persons.find((p) => p.id === targetPersonId);
+  const suffix = target?.gender === "male" ? "子" : "女";
+
+  const presets = RANK_PRESETS.map((r) => `${r}${suffix}`);
+
+  const selectedPreset = presets.includes(value) ? value : undefined;
+
+  return (
+    <div className="space-y-2">
+      <div className="space-y-1.5">
+        <Label className="text-sm font-medium">排行标签</Label>
+        <Select
+          value={selectedPreset || (isCustom ? "__custom__" : "")}
+          onValueChange={(v) => {
+            if (!v) return;
+            if (v === "__custom__") {
+              setIsCustom(true);
+              onChange("");
+            } else {
+              setIsCustom(false);
+              onChange(v);
+            }
+          }}
+        >
+          <SelectTrigger className="h-10 w-full">
+            <SelectValue placeholder="选择排行（如长子、长女）" />
+          </SelectTrigger>
+          <SelectContent>
+            {presets.map((p) => (
+              <SelectItem key={p} value={p}>{p}</SelectItem>
+            ))}
+            <SelectItem value="__custom__">自定义...</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {isCustom && (
+        <Input
+          placeholder="输入自定义标签"
+          className="h-10"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+    </div>
+  );
+}
+
 interface RelationshipFormProps {
   open: boolean;
   onClose: () => void;
@@ -36,6 +98,7 @@ export function RelationshipForm({ open, onClose, currentPersonId }: Relationshi
   const [loadingPersons, setLoadingPersons] = useState(false);
   const [relationType, setRelationType] = useState<RelationType>("spouse");
   const [targetPersonId, setTargetPersonId] = useState<string>("");
+  const [label, setLabel] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,6 +126,7 @@ export function RelationshipForm({ open, onClose, currentPersonId }: Relationshi
     // Reset form state when dialog opens
     setRelationType("spouse");
     setTargetPersonId("");
+    setLabel("");
     setError(null);
   }, [open, currentPersonId]);
 
@@ -91,6 +155,7 @@ export function RelationshipForm({ open, onClose, currentPersonId }: Relationshi
           type: relationType,
           personAId: currentPersonId,
           personBId: targetPersonId,
+          label: label || null,
         }),
       });
 
@@ -101,8 +166,8 @@ export function RelationshipForm({ open, onClose, currentPersonId }: Relationshi
         return;
       }
 
-      const label = relationType === "spouse" ? "配偶" : "子女";
-      toast.success(`${label}关系已添加`);
+      const relLabel = relationType === "spouse" ? "配偶" : "子女";
+      toast.success(`${relLabel}关系已添加`);
       router.refresh();
       onClose();
     } catch {
@@ -215,6 +280,16 @@ export function RelationshipForm({ open, onClose, currentPersonId }: Relationshi
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Child label field */}
+            {relationType === "child" && targetPersonId && (
+              <ChildLabelField
+                persons={persons}
+                targetPersonId={targetPersonId}
+                value={label}
+                onChange={setLabel}
+              />
+            )}
           </div>
 
           {/* Action buttons */}

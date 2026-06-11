@@ -107,6 +107,7 @@ function buildEdges(
   persons: PersonData[],
   spouseMap: Map<string, string[]>,
   childrenMap: Map<string, string[]>,
+  relationships: RelationshipData[],
 ): TreeEdge[] {
   const edges: TreeEdge[] = [];
   const addedSpouse = new Set<string>();
@@ -119,11 +120,17 @@ function buildEdges(
       const pairKey = [p.id, spId].sort().join("--");
       if (!addedSpouse.has(pairKey)) {
         addedSpouse.add(pairKey);
+        const rel = relationships.find(
+          (r) => r.type === "spouse" &&
+            ((r.personAId === p.id && r.personBId === spId) ||
+             (r.personAId === spId && r.personBId === p.id))
+        );
         edges.push({
           id: `spouse-${pairKey}`,
           source: p.id,
           target: spId,
           type: "spouse",
+          label: rel?.label ?? null,
         });
       }
     }
@@ -131,11 +138,15 @@ function buildEdges(
     // Parent-child edges
     const children = childrenMap.get(p.id) || [];
     for (const childId of children) {
+      const rel = relationships.find(
+        (r) => r.type === "child" && r.personAId === p.id && r.personBId === childId
+      );
       edges.push({
         id: `child-${p.id}-${childId}`,
         source: p.id,
         target: childId,
         type: "parent-child",
+        label: rel?.label ?? null,
       });
     }
   }
@@ -308,7 +319,7 @@ export function layoutVertical(
   const levels = assignLevels(persons, childrenMap, spouseMap, rootIds);
   const positions = distributePositions(levels, spouseMap, childrenMap, parentMap, false);
   const nodes = buildNodes(persons, positions, spouseMap, childrenMap, parentMap);
-  const edges = buildEdges(persons, spouseMap, childrenMap);
+  const edges = buildEdges(persons, spouseMap, childrenMap, relationships);
 
   return { nodes, edges };
 }
@@ -327,7 +338,7 @@ export function layoutHorizontal(
   const levels = assignLevels(persons, childrenMap, spouseMap, rootIds);
   const positions = distributePositions(levels, spouseMap, childrenMap, parentMap, true);
   const nodes = buildNodes(persons, positions, spouseMap, childrenMap, parentMap);
-  const edges = buildEdges(persons, spouseMap, childrenMap);
+  const edges = buildEdges(persons, spouseMap, childrenMap, relationships);
 
   return { nodes, edges };
 }

@@ -13,6 +13,7 @@ export interface RelationshipData {
   type: "spouse" | "child";
   personAId: string;
   personBId: string;
+  label: string | null;
   sortOrder: number;
 }
 
@@ -28,4 +29,5 @@ export interface TreeEdge {
   source: string;
   target: string;
   type: "spouse" | "parent-child";
+  label: string | null;
 }

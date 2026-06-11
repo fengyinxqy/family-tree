@@ -39,6 +39,7 @@ model Relationship {
   type      String // "spouse" | "child"
   personAId String   @map("person_a_id")
   personBId String   @map("person_b_id")
+  label     String?  @map("label")
   sortOrder Int      @default(0) @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at")
   personA   Person   @relation("PersonA", fields: [personAId], references: [id], onDelete: Cascade)

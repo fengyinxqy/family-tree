@@ -61,23 +61,31 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
     }));
 
     // Map TreeEdge[] to React Flow Edge[]
-    const flowEdges: Edge[] = result.edges.map((e) => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      type: "smoothstep",
-      animated: false,
-      label: e.type === "spouse" ? "配偶" : undefined,
-      labelStyle: { fill: "#f59e0b", fontSize: 12, fontWeight: 500 },
-      labelBgStyle: { fill: "#fff", fillOpacity: 0.9 },
-      labelBgPadding: [6, 3] as [number, number],
-      labelBgBorderRadius: 4,
-      style: {
-        stroke: e.type === "spouse" ? "#f59e0b" : "#94a3b8",
-        strokeWidth: e.type === "spouse" ? 1.5 : 1.5,
-        strokeDasharray: e.type === "spouse" ? "6 4" : "none",
-      },
-    }));
+    const flowEdges: Edge[] = result.edges.map((e) => {
+      const edgeLabel = e.label || (e.type === "spouse" ? "配偶" : undefined);
+      const isSpouse = e.type === "spouse";
+      return {
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        type: "smoothstep",
+        animated: false,
+        label: edgeLabel,
+        labelStyle: {
+          fill: isSpouse ? "#f59e0b" : "#6366f1",
+          fontSize: 12,
+          fontWeight: 500,
+        },
+        labelBgStyle: { fill: "#fff", fillOpacity: 0.9 },
+        labelBgPadding: [6, 3] as [number, number],
+        labelBgBorderRadius: 4,
+        style: {
+          stroke: isSpouse ? "#f59e0b" : "#94a3b8",
+          strokeWidth: 1.5,
+          strokeDasharray: isSpouse ? "6 4" : "none",
+        },
+      };
+    });
 
     setNodes(flowNodes);
     setEdges(flowEdges);

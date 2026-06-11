@@ -38,6 +38,7 @@ export default async function TreePage() {
     type: r.type as "spouse" | "child",
     personAId: r.personAId,
     personBId: r.personBId,
+    label: r.label,
     sortOrder: r.sortOrder,
   }));
 

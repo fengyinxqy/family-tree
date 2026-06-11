@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   if (!session?.user?.id) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
   const body = await request.json();
-  const { type, personAId, personBId, sortOrder } = body;
+  const { type, personAId, personBId, sortOrder, label } = body;
 
   // 验证权限
   const [a, b] = await Promise.all([
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   }
 
   const rel = await prisma.relationship.create({
-    data: { type, personAId, personBId, sortOrder: sortOrder || 0 },
+    data: { type, personAId, personBId, label: label || null, sortOrder: sortOrder || 0 },
   });
 
   return NextResponse.json(rel, { status: 201 });
