@@ -171,7 +171,6 @@ function distributePositions(
   spouseMap: Map<string, string[]>,
   childrenMap: Map<string, string[]>,
   parentMap: Map<string, string[]>,
-  isHorizontal: boolean,
 ): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>();
 
@@ -246,17 +245,10 @@ function distributePositions(
       for (const nodeId of sortedGroup) {
         positionedInLevel.add(nodeId);
 
-        if (isHorizontal) {
-          positions.set(nodeId, {
-            x: level * (NODE_H + V_GAP),
-            y: groupStartX + NODE_W / 2,
-          });
-        } else {
-          positions.set(nodeId, {
-            x: groupStartX + NODE_W / 2,
-            y: level * (NODE_H + V_GAP),
-          });
-        }
+        positions.set(nodeId, {
+          x: groupStartX + NODE_W / 2,
+          y: level * (NODE_H + V_GAP),
+        });
         groupStartX += NODE_W + gap;
       }
       startX += groupWidth + H_GAP;
@@ -352,26 +344,7 @@ export function layoutVertical(
   const { spouseMap, childrenMap, parentMap } = buildMaps(persons, relationships);
   const rootIds = findRoots(persons, parentMap);
   const levels = assignLevels(persons, childrenMap, spouseMap, rootIds);
-  const positions = distributePositions(persons, levels, spouseMap, childrenMap, parentMap, false);
-  const nodes = buildNodes(persons, positions, spouseMap, childrenMap, parentMap);
-  const edges = buildEdges(persons, spouseMap, childrenMap, relationships);
-
-  return { nodes, edges };
-}
-
-/**
- * Layout the family tree horizontally (left-to-right): ancestors at left, descendants to right.
- */
-export function layoutHorizontal(
-  persons: PersonData[],
-  relationships: RelationshipData[],
-): LayoutResult {
-  if (persons.length === 0) return { nodes: [], edges: [] };
-
-  const { spouseMap, childrenMap, parentMap } = buildMaps(persons, relationships);
-  const rootIds = findRoots(persons, parentMap);
-  const levels = assignLevels(persons, childrenMap, spouseMap, rootIds);
-  const positions = distributePositions(persons, levels, spouseMap, childrenMap, parentMap, true);
+  const positions = distributePositions(persons, levels, spouseMap, childrenMap, parentMap);
   const nodes = buildNodes(persons, positions, spouseMap, childrenMap, parentMap);
   const edges = buildEdges(persons, spouseMap, childrenMap, relationships);
 

@@ -13,10 +13,10 @@ import {
   type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Plus, ArrowLeftRight } from "lucide-react";
+import { Plus } from "lucide-react";
 import { PersonNode } from "./person-node";
 import { PersonForm } from "./person-form";
-import { layoutVertical, layoutHorizontal } from "@/lib/tree-layout";
+import { layoutVertical } from "@/lib/tree-layout";
 import type { PersonData, RelationshipData, TreeNode, TreeEdge } from "@/types";
 
 const nodeTypes = { person: PersonNode };
@@ -33,12 +33,11 @@ function minimapNodeColor(node: Node): string {
 }
 
 function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
-  const [layoutMode, setLayoutMode] = useState<"vertical" | "horizontal">("vertical");
   const [personFormOpen, setPersonFormOpen] = useState(false);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  // Compute layout whenever data or orientation changes
+  // Compute layout whenever data changes
   const applyLayout = useCallback(() => {
     if (persons.length === 0) {
       setNodes([]);
@@ -47,9 +46,7 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
     }
 
     const result: { nodes: TreeNode[]; edges: TreeEdge[] } =
-      layoutMode === "vertical"
-        ? layoutVertical(persons, relationships)
-        : layoutHorizontal(persons, relationships);
+      layoutVertical(persons, relationships);
 
     // Map TreeNode[] to React Flow Node[]
     const flowNodes: Node[] = result.nodes.map((n) => ({
@@ -91,7 +88,7 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
 
     setNodes(flowNodes);
     setEdges(flowEdges);
-  }, [persons, relationships, layoutMode, setNodes, setEdges]);
+  }, [persons, relationships, setNodes, setEdges]);
 
   // Apply layout on mount and when data changes
   useEffect(() => {
@@ -151,31 +148,6 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
         >
           <Plus className="h-4 w-4" strokeWidth={2} />
           新增人物
-        </button>
-
-        {/* Layout toggle button */}
-        <button
-          onClick={() =>
-            setLayoutMode((prev) =>
-              prev === "vertical" ? "horizontal" : "vertical",
-            )
-          }
-          className="
-            inline-flex items-center gap-2 px-4 py-2.5
-            rounded-xl
-            bg-white/80 dark:bg-zinc-800/80
-            backdrop-blur
-            border border-border
-            text-sm font-medium text-foreground
-            shadow-md shadow-zinc-200/40 dark:shadow-zinc-900/60
-            transition-all duration-200
-            hover:bg-white dark:hover:bg-zinc-800
-            hover:shadow-lg
-            hover:border-amber-300/60 dark:hover:border-amber-600/30
-          "
-        >
-          <ArrowLeftRight className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-          {layoutMode === "vertical" ? "横向" : "纵向"}
         </button>
       </div>
 
