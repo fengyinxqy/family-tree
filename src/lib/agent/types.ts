@@ -51,10 +51,18 @@ export interface DraftRelationship {
 }
 
 export interface DraftAmbiguity {
-  kind: "person_match" | "missing_reference" | "duplicate_relationship";
+  kind:
+    | "person_match"
+    | "missing_reference"
+    | "duplicate_relationship"
+    | "person_gender_unknown"
+    | "generation_unclear"
+    | "relationship_direction_unknown";
   message: string;
   relatedRefs: string[];
   options: string[];
+  /** 自然语言追问文本，前端可展示并引导用户回答 */
+  question?: string;
 }
 
 export interface IntakeDraft {

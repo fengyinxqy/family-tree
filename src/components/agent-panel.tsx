@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Bot,
   Check,
+  Clock,
   GitBranch,
   Loader2,
   MessageSquareText,
@@ -73,6 +74,15 @@ interface RelationshipAgentResponse {
   };
 }
 
+interface ClarificationEntry {
+  /** 轮次序号 (1-based) */
+  round: number;
+  /** 用户补充文本 */
+  userText: string;
+  /** 提交时间戳 */
+  timestamp: number;
+}
+
 function ThinkingCard({ label }: { label: string }) {
   return (
     <div className="flex gap-3">
@@ -134,20 +144,52 @@ function DraftSummary({
   draft,
   onApply,
   isApplying,
+  onClarify,
+  isClarifying,
+  clarifyCount,
+  maxClarifyRounds,
+  clarificationHistory,
 }: {
   draft: IntakeDraft;
   onApply: () => void;
   isApplying: boolean;
+  onClarify?: (text: string) => void;
+  isClarifying?: boolean;
+  clarifyCount?: number;
+  maxClarifyRounds?: number;
+  clarificationHistory?: ClarificationEntry[];
 }) {
+  const [clarifyText, setClarifyText] = useState("");
+  const atMaxRounds =
+    clarifyCount !== undefined &&
+    maxClarifyRounds !== undefined &&
+    clarifyCount >= maxClarifyRounds;
+
+  function handleClarifySubmit() {
+    const text = clarifyText.trim();
+    if (!text || !onClarify) {
+      return;
+    }
+    onClarify(text);
+    setClarifyText("");
+  }
+
   return (
     <Card size="sm" className="border border-border/70 bg-background/78">
       <CardHeader>
         <CardTitle>录入草稿</CardTitle>
         <CardDescription>{draft.summary}</CardDescription>
         <CardAction>
-          <Badge variant={draft.readyToApply ? "default" : "secondary"}>
-            {draft.readyToApply ? "可写入" : "待确认"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {clarifyCount !== undefined && clarifyCount > 0 ? (
+              <Badge variant="secondary">
+                第 {clarifyCount}/{maxClarifyRounds} 轮澄清
+              </Badge>
+            ) : null}
+            <Badge variant={draft.readyToApply ? "default" : "secondary"}>
+              {draft.readyToApply ? "可写入" : "待确认"}
+            </Badge>
+          </div>
         </CardAction>
       </CardHeader>
 
@@ -195,8 +237,13 @@ function DraftSummary({
                 <AlertTitle>需要人工确认</AlertTitle>
                 <AlertDescription>
                   <p>{ambiguity.message}</p>
+                  {ambiguity.question ? (
+                    <p className="mt-1 text-sm font-medium text-foreground/80">
+                      💬 {ambiguity.question}
+                    </p>
+                  ) : null}
                   {ambiguity.options.length > 0 ? (
-                    <p>候选项：{ambiguity.options.join(" / ")}</p>
+                    <p className="mt-1">候选项：{ambiguity.options.join(" / ")}</p>
                   ) : null}
                 </AlertDescription>
               </Alert>
@@ -214,6 +261,82 @@ function DraftSummary({
               ))}
             </AlertDescription>
           </Alert>
+        ) : null}
+
+        {/* 澄清历史时间线 */}
+        {clarificationHistory && clarificationHistory.length > 0 ? (
+          <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-background/50 p-3">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Clock className="size-3.5" />
+              澄清历史
+            </div>
+            <div className="flex flex-col gap-2">
+              {clarificationHistory.map((entry) => (
+                <div
+                  key={entry.timestamp}
+                  className="flex items-start gap-2 text-xs"
+                >
+                  <span className="mt-0.5 shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-primary">
+                    R{entry.round}
+                  </span>
+                  <span className="text-muted-foreground">{entry.userText}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {/* 达到澄清上限提示 */}
+        {atMaxRounds && !draft.readyToApply ? (
+          <Alert variant="destructive">
+            <TriangleAlert />
+            <AlertTitle>已达澄清上限</AlertTitle>
+            <AlertDescription>
+              已完成 {maxClarifyRounds} 轮澄清，草稿仍无法自动解决所有歧义。
+              建议重新录入或切换到手动添加人物。
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {/* 澄清补充输入区 */}
+        {!draft.readyToApply && onClarify ? (
+          <div className="flex flex-col gap-2">
+            {atMaxRounds ? null : (
+              <>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="补充一句话来澄清..."
+                    value={clarifyText}
+                    onChange={(e) => setClarifyText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleClarifySubmit();
+                      }
+                    }}
+                    disabled={isClarifying}
+                    className="flex-1 bg-background/72 text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleClarifySubmit}
+                    disabled={!clarifyText.trim() || isClarifying}
+                  >
+                    {isClarifying ? (
+                      <Loader2 data-icon="inline-start" className="animate-spin" />
+                    ) : (
+                      <MessageSquareText data-icon="inline-start" />
+                    )}
+                    补充澄清
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  输入一句补充信息（如：他的父亲叫王建国、他的性别是男），
+                  按 Enter 提交
+                </p>
+              </>
+            )}
+          </div>
         ) : null}
 
         <div className="flex justify-end">
@@ -303,6 +426,10 @@ export function AgentPanel() {
   ]);
   const [isSubmitting, startSubmitting] = useTransition();
   const [isApplying, startApplying] = useTransition();
+  const [isClarifying, startClarifying] = useTransition();
+  const [clarifyCount, setClarifyCount] = useState(0);
+  const [clarificationHistory, setClarificationHistory] = useState<ClarificationEntry[]>([]);
+  const maxClarifyRounds = 5;
   const intakeFieldId = useId();
   const relationshipFieldId = useId();
 
@@ -345,6 +472,8 @@ export function AgentPanel() {
 
         const nextDraft = json as IntakeDraft;
         setDraft(nextDraft);
+        setClarifyCount(0);
+        setClarificationHistory([]);
         setRelationshipResult(null);
         pushMessage({
           id: `assistant-intake-${Date.now()}`,
@@ -392,10 +521,82 @@ export function AgentPanel() {
         });
         setDraft(null);
         setIntakeText("");
+        setClarifyCount(0);
+        setClarificationHistory([]);
         router.refresh();
         toast.success("家谱已更新。");
       } catch (error) {
         const message = error instanceof Error ? error.message : "草稿写入失败";
+        toast.error(message);
+      }
+    });
+  }
+
+  function handleClarify(clarificationText: string) {
+    if (!draft || !intakeText) {
+      return;
+    }
+
+    if (clarifyCount >= maxClarifyRounds) {
+      toast.error("已达到最大澄清轮次，请重新开始或手动录入。");
+      return;
+    }
+
+    const nextRound = clarifyCount + 1;
+    const entry: ClarificationEntry = {
+      round: nextRound,
+      userText: clarificationText,
+      timestamp: Date.now(),
+    };
+
+    pushMessage({
+      id: `user-clarify-${Date.now()}`,
+      role: "user",
+      title: `补充澄清 (第 ${nextRound} 轮)`,
+      body: clarificationText,
+    });
+
+    startClarifying(async () => {
+      try {
+        const response = await fetch("/api/agent/intake", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: intakeText,
+            previousDraft: draft,
+            clarificationText,
+          }),
+        });
+        const json = await response.json();
+
+        if (!response.ok) {
+          throw new Error(json.error || "澄清请求失败");
+        }
+
+        const nextDraft = json as IntakeDraft;
+        setDraft(nextDraft);
+        setClarifyCount(nextRound);
+        setClarificationHistory((prev) => [...prev, entry]);
+
+        pushMessage({
+          id: `assistant-clarify-${Date.now()}`,
+          role: "assistant",
+          title: `草稿已更新 (第 ${nextRound} 轮澄清)`,
+          body: summarizeDraft(nextDraft),
+        });
+        toast.success(
+          nextDraft.readyToApply
+            ? "歧义已全部解决，可以写入家谱。"
+            : "草稿已更新，仍有待确认项。",
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "澄清请求失败";
+        pushMessage({
+          id: `assistant-clarify-error-${Date.now()}`,
+          role: "assistant",
+          title: "澄清失败",
+          body: message,
+        });
         toast.error(message);
       }
     });
@@ -542,6 +743,11 @@ export function AgentPanel() {
                 draft={draft}
                 onApply={handleApplyDraft}
                 isApplying={isApplying}
+                onClarify={handleClarify}
+                isClarifying={isClarifying}
+                clarifyCount={clarifyCount}
+                maxClarifyRounds={maxClarifyRounds}
+                clarificationHistory={clarificationHistory}
               />
             ) : null}
           </TabsContent>

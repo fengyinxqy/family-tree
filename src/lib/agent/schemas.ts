@@ -51,10 +51,18 @@ export const draftRelationshipSchema = z.object({
 });
 
 export const draftAmbiguitySchema = z.object({
-  kind: z.enum(["person_match", "missing_reference", "duplicate_relationship"]),
+  kind: z.enum([
+    "person_match",
+    "missing_reference",
+    "duplicate_relationship",
+    "person_gender_unknown",
+    "generation_unclear",
+    "relationship_direction_unknown",
+  ]),
   message: z.string().min(1),
   relatedRefs: z.array(z.string()),
   options: z.array(z.string()),
+  question: z.string().optional(),
 });
 
 export const intakeDraftSchema = z.object({
@@ -75,6 +83,10 @@ export const relationshipQuestionExtractionSchema = z.object({
 
 export const intakeRouteRequestSchema = z.object({
   text: z.string().min(1, "text is required"),
+  /** 前一轮草稿，传入则触发续写模式 */
+  previousDraft: intakeDraftSchema.optional(),
+  /** 用户补充澄清文本，与 previousDraft 一起使用时触发续写 */
+  clarificationText: z.string().optional(),
 });
 
 export const intakeApplyRequestSchema = z.object({
