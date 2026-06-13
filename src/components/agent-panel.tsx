@@ -466,6 +466,9 @@ export function AgentPanel() {
   }
 
   function summarizeDraft(nextDraft: IntakeDraft) {
+    if (nextDraft.persons.length === 0 && nextDraft.relationships.length === 0) {
+      return "未能从输入中识别出人物或关系，请尝试用更具体的方式描述。";
+    }
     return `识别到 ${nextDraft.persons.length} 位人物、${nextDraft.relationships.length} 条关系。${
       nextDraft.readyToApply ? "当前草稿可以直接写入。" : "当前草稿仍有待确认项。"
     }`;
@@ -774,7 +777,7 @@ export function AgentPanel() {
               </Button>
             </div>
 
-            {draft ? (
+            {draft && (draft.persons.length > 0 || draft.relationships.length > 0) ? (
               <DraftSummary
                 draft={draft}
                 onApply={handleApplyDraft}

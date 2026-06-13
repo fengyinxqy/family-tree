@@ -248,7 +248,7 @@ export function buildIntakeDraft(
     relationships,
     ambiguities,
     questions: extraction.questions,
-    readyToApply: ambiguities.length === 0,
+    readyToApply: ambiguities.length === 0 && (persons.length > 0 || relationships.length > 0),
   };
 
   return intakeDraftSchema.parse(draft);
@@ -587,7 +587,9 @@ export function mergeDraftWithClarification(
   };
 
   // 重新计算 readyToApply
-  mergedDraft.readyToApply = mergedDraft.ambiguities.length === 0;
+  mergedDraft.readyToApply =
+    mergedDraft.ambiguities.length === 0 &&
+    (mergedDraft.persons.length > 0 || mergedDraft.relationships.length > 0);
 
   return intakeDraftSchema.parse(mergedDraft);
 }
