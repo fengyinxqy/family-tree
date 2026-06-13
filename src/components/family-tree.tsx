@@ -29,6 +29,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  getTreeFocusTarget,
+  syncHighlightedNodes,
+} from "@/lib/member-search";
 import { layoutVertical } from "@/lib/tree-layout";
 import type { PersonData, RelationshipData, TreeEdge, TreeNode } from "@/types";
 
@@ -55,46 +59,44 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
   const [shouldFit, setShouldFit] = useState(true);
   const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
   const { setCenter } = useReactFlow();
+  const focusRequestRef = useRef<string | null>(null);
   const highlightedNodeRef = useRef<string | null>(null);
 
-  // Keep ref in sync so applyLayout can preserve highlight state
   useEffect(() => {
     highlightedNodeRef.current = highlightedNodeId;
   }, [highlightedNodeId]);
 
-  // Sync highlighted state to node data
   useEffect(() => {
-    if (!highlightedNodeId) return;
-    setNodes((nds) =>
-      nds.map((n) => {
-        const isHighlighted = n.id === highlightedNodeId;
-        if ((n.data as Record<string, unknown>).highlighted === isHighlighted) return n;
-        return {
-          ...n,
-          data: { ...(n.data as Record<string, unknown>), highlighted: isHighlighted },
-        };
-      }),
-    );
+    setNodes((currentNodes) => syncHighlightedNodes(currentNodes, highlightedNodeId));
   }, [highlightedNodeId, setNodes]);
 
-  const handleSearchSelect = useCallback(
-    (personId: string) => {
-      setHighlightedNodeId(personId);
-      // Find the node's current position and center on it
-      const node = nodes.find((n) => n.id === personId);
-      if (node) {
-        setCenter(node.position.x + 95, node.position.y + 40, {
-          zoom: 1.0,
-          duration: 600,
-        });
-      }
-    },
-    [nodes, setCenter],
-  );
+  const handleSearchSelect = useCallback((personId: string) => {
+    setHighlightedNodeId(personId);
+    focusRequestRef.current = personId;
+  }, []);
 
   const handleSearchClear = useCallback(() => {
     setHighlightedNodeId(null);
+    focusRequestRef.current = null;
   }, []);
+
+  const handleSearchStart = useCallback(() => {
+    setHighlightedNodeId(null);
+    focusRequestRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (!focusRequestRef.current) return;
+
+    const target = getTreeFocusTarget(nodes, focusRequestRef.current);
+    if (!target) return;
+
+    setCenter(target.x, target.y, {
+      zoom: 1.0,
+      duration: 600,
+    });
+    focusRequestRef.current = null;
+  }, [nodes, setCenter]);
 
   const applyLayout = useCallback(() => {
     if (persons.length === 0) {
@@ -171,11 +173,11 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
   }, [nodes.length, shouldFit]);
 
   return (
-    <div className="flex flex-1 w-full overflow-hidden">
+    <div className="flex w-full flex-1 overflow-hidden">
       <div className="relative min-w-0 flex-1 overflow-hidden">
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -left-32 top-0 h-[380px] w-[380px] rounded-full bg-primary/10 blur-3xl" />
-          <div className="absolute right-[-10%] bottom-[-12%] h-[420px] w-[420px] rounded-full bg-secondary/35 blur-3xl" />
+          <div className="absolute bottom-[-12%] right-[-10%] h-[420px] w-[420px] rounded-full bg-secondary/35 blur-3xl" />
           <div
             className="absolute inset-0 opacity-35"
             style={{
@@ -188,7 +190,7 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
 
         <div className="absolute inset-x-0 top-0 z-20 flex flex-col gap-3 p-4 sm:p-6">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-            <Card className="app-panel w-full xl:w-auto overflow-visible border border-border/70 bg-card/78">
+            <Card className="app-panel w-full overflow-visible border border-border/70 bg-card/78 xl:w-auto">
               <CardHeader className="gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex size-11 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
@@ -207,6 +209,7 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
                   persons={persons}
                   onSelect={handleSearchSelect}
                   onClear={handleSearchClear}
+                  onSearchStart={handleSearchStart}
                   highlightedNodeId={highlightedNodeId}
                 />
                 <div className="flex flex-wrap items-center gap-2">
