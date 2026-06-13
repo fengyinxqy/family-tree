@@ -506,13 +506,15 @@ export function AgentPanel() {
         setClarifyCount(0);
         setClarificationHistory([]);
         setRelationshipResult(null);
+
+        const isEmpty = nextDraft.persons.length === 0 && nextDraft.relationships.length === 0;
         pushMessage({
           id: `assistant-intake-${Date.now()}`,
           role: "assistant",
-          title: "草稿已生成",
+          title: isEmpty ? "未能识别" : "草稿已生成",
           body: summarizeDraft(nextDraft),
         });
-        toast.success("录入草稿已生成。");
+        toast.success(isEmpty ? "未能从输入中识别出人物或关系，请换一种方式描述。" : "录入草稿已生成。");
       } catch (error) {
         const message = error instanceof Error ? error.message : "录入请求失败";
         pushMessage({
@@ -609,16 +611,19 @@ export function AgentPanel() {
         setClarifyCount(nextRound);
         setClarificationHistory((prev) => [...prev, entry]);
 
+        const isEmpty = nextDraft.persons.length === 0 && nextDraft.relationships.length === 0;
         pushMessage({
           id: `assistant-clarify-${Date.now()}`,
           role: "assistant",
-          title: `草稿已更新 (第 ${nextRound} 轮澄清)`,
+          title: isEmpty ? "未能识别" : `草稿已更新 (第 ${nextRound} 轮澄清)`,
           body: summarizeDraft(nextDraft),
         });
         toast.success(
-          nextDraft.readyToApply
-            ? "歧义已全部解决，可以写入家谱。"
-            : "草稿已更新，仍有待确认项。",
+          isEmpty
+            ? "未能从输入中识别出人物或关系，请换一种方式描述。"
+            : nextDraft.readyToApply
+              ? "歧义已全部解决，可以写入家谱。"
+              : "草稿已更新，仍有待确认项。",
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : "澄清请求失败";
