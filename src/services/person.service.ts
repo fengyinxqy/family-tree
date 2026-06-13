@@ -1,11 +1,10 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { deriveSiblingRelations, type DerivedSiblingRelation } from "@/lib/relationships/derived-siblings";
+import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { PersonEventData } from "@/types";
-
-// ── 输入类型 ──────────────────────────────────────────────
 
 export interface PersonEventInput {
   type: "birth" | "marriage" | "migration" | "other";
@@ -42,6 +41,8 @@ export interface UpdatePersonInput {
   events?: PersonEventInput[];
 }
 
+export type PersonSiblingData = DerivedSiblingRelation;
+
 export interface PersonDetailResult {
   id: string;
   name: string;
@@ -59,6 +60,7 @@ export interface PersonDetailResult {
   updatedAt: Date;
   createdBy: string;
   events: PersonEventData[];
+  siblings: PersonSiblingData[];
   relationsA: Array<{
     id: string;
     type: string;
@@ -87,15 +89,13 @@ export interface PersonDetailResult {
   }>;
 }
 
-// ── 校验 ──────────────────────────────────────────────────
-
-/** 合法的日期标签格式: YYYY / YYYY-MM / YYYY-MM-DD / 空 */
 const DATE_LABEL_RE = /^(\d{4}(-\d{2}(-\d{2})?)?)?$/;
 
 function validateEvents(events: PersonEventInput[]): void {
-  // 检查是否有重复的事件类型（birth 只能有一条）
-  const birthCount = events.filter((e) => e.type === "birth").length;
-  if (birthCount > 1) throw new Error("出生事件只能有一个");
+  const birthCount = events.filter((event) => event.type === "birth").length;
+  if (birthCount > 1) {
+    throw new Error("出生事件只能有一个");
+  }
 
   for (const event of events) {
     if (event.dateLabel && !DATE_LABEL_RE.test(event.dateLabel)) {
@@ -104,11 +104,11 @@ function validateEvents(events: PersonEventInput[]): void {
   }
 }
 
-// ── 查询 ──────────────────────────────────────────────────
-
 export async function getPersons() {
   const session = await auth();
-  if (!session?.user?.id) throw new Error("未登录");
+  if (!session?.user?.id) {
+    throw new Error("未登录");
+  }
 
   return prisma.person.findMany({
     where: { createdBy: session.user.id },
@@ -116,9 +116,61 @@ export async function getPersons() {
   });
 }
 
+async function getDerivedSiblings(
+  personId: string,
+  personGender: string,
+  relationsB: PersonDetailResult["relationsB"],
+) {
+  const parentIds = [...new Set(relationsB.filter((relation) => relation.type === "child").map((relation) => relation.personA.id))];
+
+  if (parentIds.length === 0) {
+    return [];
+  }
+
+  const siblingRelations = await prisma.relationship.findMany({
+    where: {
+      type: "child",
+      personAId: { in: parentIds },
+      NOT: { personBId: personId },
+    },
+    include: {
+      personA: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      personB: {
+        select: {
+          id: true,
+          name: true,
+          gender: true,
+        },
+      },
+    },
+    orderBy: [{ personAId: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+
+  return deriveSiblingRelations(
+    personId,
+    personGender,
+    siblingRelations.map((relation) => ({
+      parentId: relation.personA.id,
+      parentName: relation.personA.name,
+      sibling: {
+        id: relation.personB.id,
+        name: relation.personB.name,
+        gender: relation.personB.gender,
+      },
+    })),
+  );
+}
+
 export async function getPerson(id: string): Promise<PersonDetailResult> {
   const session = await auth();
-  if (!session?.user?.id) throw new Error("未登录");
+  if (!session?.user?.id) {
+    throw new Error("未登录");
+  }
 
   const person = await prisma.person.findUnique({
     where: { id },
@@ -145,17 +197,25 @@ export async function getPerson(id: string): Promise<PersonDetailResult> {
     throw new Error("人物不存在");
   }
 
-  return person as unknown as PersonDetailResult;
-}
+  const siblings = await getDerivedSiblings(id, person.gender, person.relationsB as PersonDetailResult["relationsB"]);
 
-// ── 创建 ──────────────────────────────────────────────────
+  return {
+    ...(person as unknown as Omit<PersonDetailResult, "siblings">),
+    siblings,
+  };
+}
 
 export async function createPerson(input: CreatePersonInput) {
   const session = await auth();
-  if (!session?.user?.id) throw new Error("未登录");
+  if (!session?.user?.id) {
+    throw new Error("未登录");
+  }
+
   const userId = session.user.id;
 
-  if (input.events) validateEvents(input.events);
+  if (input.events) {
+    validateEvents(input.events);
+  }
 
   const person = await prisma.$transaction(async (tx) => {
     const created = await tx.person.create({
@@ -175,14 +235,14 @@ export async function createPerson(input: CreatePersonInput) {
 
     if (input.events && input.events.length > 0) {
       await tx.personEvent.createMany({
-        data: input.events.map((e, i) => ({
+        data: input.events.map((event, index) => ({
           personId: created.id,
-          type: e.type,
-          title: e.title ?? null,
-          dateLabel: e.dateLabel ?? null,
-          location: e.location ?? null,
-          description: e.description ?? null,
-          sortOrder: e.sortOrder ?? i,
+          type: event.type,
+          title: event.title ?? null,
+          dateLabel: event.dateLabel ?? null,
+          location: event.location ?? null,
+          description: event.description ?? null,
+          sortOrder: event.sortOrder ?? index,
         })),
       });
     }
@@ -194,19 +254,22 @@ export async function createPerson(input: CreatePersonInput) {
   return person;
 }
 
-// ── 更新 ──────────────────────────────────────────────────
-
 export async function updatePerson(id: string, input: UpdatePersonInput) {
   const session = await auth();
-  if (!session?.user?.id) throw new Error("未登录");
+  if (!session?.user?.id) {
+    throw new Error("未登录");
+  }
 
   const existing = await prisma.person.findUnique({ where: { id } });
-  if (!existing || existing.createdBy !== session.user.id) throw new Error("无权操作");
+  if (!existing || existing.createdBy !== session.user.id) {
+    throw new Error("无权操作");
+  }
 
-  if (input.events) validateEvents(input.events);
+  if (input.events) {
+    validateEvents(input.events);
+  }
 
   const updated = await prisma.$transaction(async (tx) => {
-    // 更新人物基础字段
     const person = await tx.person.update({
       where: { id },
       data: {
@@ -222,19 +285,18 @@ export async function updatePerson(id: string, input: UpdatePersonInput) {
       },
     });
 
-    // 如果传入了 events，采用替换式写入：删旧建新
     if (input.events !== undefined) {
       await tx.personEvent.deleteMany({ where: { personId: id } });
       if (input.events.length > 0) {
         await tx.personEvent.createMany({
-          data: input.events.map((e, i) => ({
+          data: input.events.map((event, index) => ({
             personId: id,
-            type: e.type,
-            title: e.title ?? null,
-            dateLabel: e.dateLabel ?? null,
-            location: e.location ?? null,
-            description: e.description ?? null,
-            sortOrder: e.sortOrder ?? i,
+            type: event.type,
+            title: event.title ?? null,
+            dateLabel: event.dateLabel ?? null,
+            location: event.location ?? null,
+            description: event.description ?? null,
+            sortOrder: event.sortOrder ?? index,
           })),
         });
       }
@@ -244,25 +306,25 @@ export async function updatePerson(id: string, input: UpdatePersonInput) {
   });
 
   revalidatePath("/tree");
+  revalidatePath(`/person/${id}`);
   return updated;
 }
 
-// ── 删除 ──────────────────────────────────────────────────
-
 export async function deletePerson(id: string) {
   const session = await auth();
-  if (!session?.user?.id) throw new Error("未登录");
+  if (!session?.user?.id) {
+    throw new Error("未登录");
+  }
 
   const person = await prisma.person.findUnique({ where: { id } });
-  if (!person || person.createdBy !== session.user.id) throw new Error("无权操作");
+  if (!person || person.createdBy !== session.user.id) {
+    throw new Error("无权操作");
+  }
 
-  // 先删关联事件
   await prisma.personEvent.deleteMany({ where: { personId: id } });
-  // 删关系
   await prisma.relationship.deleteMany({
     where: { OR: [{ personAId: id }, { personBId: id }] },
   });
-  // 删人物
   await prisma.person.delete({ where: { id } });
 
   revalidatePath("/tree");

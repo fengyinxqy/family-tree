@@ -1,49 +1,50 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { createRelationship, deleteRelationship } from "@/services/relationship.service";
 
 export async function POST(request: Request) {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
 
   const body = await request.json();
   const { type, personAId, personBId, sortOrder, label } = body;
 
-  // 验证权限
-  const [a, b] = await Promise.all([
-    prisma.person.findUnique({ where: { id: personAId } }),
-    prisma.person.findUnique({ where: { id: personBId } }),
-  ]);
-
-  if (!a || !b || a.createdBy !== session.user.id || b.createdBy !== session.user.id) {
-    return NextResponse.json({ error: "无权操作" }, { status: 403 });
-  }
-
-  if (type === "spouse") {
-    const existing = await prisma.relationship.findFirst({
-      where: {
-        type: "spouse",
-        OR: [
-          { personAId, personBId },
-          { personAId: personBId, personBId: personAId },
-        ],
-      },
+  try {
+    const relationship = await createRelationship({
+      type,
+      personAId,
+      personBId,
+      sortOrder,
+      label,
     });
-    if (existing) return NextResponse.json({ error: "该配偶关系已存在" }, { status: 409 });
+
+    return NextResponse.json(relationship, { status: 201 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "添加关系失败";
+    const status =
+      message === "无权操作" ? 403 : message.includes("已存在") ? 409 : message === "未登录" ? 401 : 400;
+
+    return NextResponse.json({ error: message }, { status });
   }
-
-  const rel = await prisma.relationship.create({
-    data: { type, personAId, personBId, label: label || null, sortOrder: sortOrder || 0 },
-  });
-
-  return NextResponse.json(rel, { status: 201 });
 }
 
 export async function DELETE(request: Request) {
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
 
   const { id } = await request.json();
-  await prisma.relationship.delete({ where: { id } });
-  return NextResponse.json({ success: true });
+
+  try {
+    await deleteRelationship(id);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "删除关系失败";
+    const status = message === "无权操作" ? 403 : message === "未登录" ? 401 : 404;
+
+    return NextResponse.json({ error: message }, { status });
+  }
 }

@@ -1,50 +1,102 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
-export async function createRelationship(data: {
+export interface CreateRelationshipInput {
   type: "spouse" | "child";
   personAId: string;
   personBId: string;
   sortOrder?: number;
-}) {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("未登录");
+  label?: string | null;
+}
 
-  // 验证两个人物都属于该用户
-  const [a, b] = await Promise.all([
-    prisma.person.findUnique({ where: { id: data.personAId } }),
-    prisma.person.findUnique({ where: { id: data.personBId } }),
+async function getOwnedPersons(personAId: string, personBId: string, userId: string) {
+  const [personA, personB] = await Promise.all([
+    prisma.person.findUnique({ where: { id: personAId } }),
+    prisma.person.findUnique({ where: { id: personBId } }),
   ]);
 
-  if (!a || !b || a.createdBy !== session.user.id || b.createdBy !== session.user.id) {
+  if (!personA || !personB || personA.createdBy !== userId || personB.createdBy !== userId) {
     throw new Error("无权操作");
   }
 
-  // 配偶关系：检查是否已存在
-  if (data.type === "spouse") {
-    const existing = await prisma.relationship.findFirst({
-      where: {
-        type: "spouse",
-        OR: [
-          { personAId: data.personAId, personBId: data.personBId },
-          { personAId: data.personBId, personBId: data.personAId },
-        ],
-      },
-    });
-    if (existing) throw new Error("该配偶关系已存在");
+  return { personA, personB };
+}
+
+function revalidateRelationshipPaths(personAId: string, personBId: string) {
+  revalidatePath("/tree");
+  revalidatePath(`/person/${personAId}`);
+  revalidatePath(`/person/${personBId}`);
+  revalidatePath(`/person/${personAId}/relationships`);
+  revalidatePath(`/person/${personBId}/relationships`);
+}
+
+export async function createRelationship(input: CreateRelationshipInput) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("未登录");
   }
 
-  const rel = await prisma.relationship.create({ data });
-  revalidatePath("/tree");
-  return rel;
+  await getOwnedPersons(input.personAId, input.personBId, session.user.id);
+
+  const duplicateWhere =
+    input.type === "spouse"
+      ? {
+          type: "spouse" as const,
+          OR: [
+            { personAId: input.personAId, personBId: input.personBId },
+            { personAId: input.personBId, personBId: input.personAId },
+          ],
+        }
+      : {
+          type: "child" as const,
+          personAId: input.personAId,
+          personBId: input.personBId,
+        };
+
+  const existing = await prisma.relationship.findFirst({ where: duplicateWhere });
+  if (existing) {
+    throw new Error(input.type === "spouse" ? "该配偶关系已存在" : "该父母-子女关系已存在");
+  }
+
+  const relationship = await prisma.relationship.create({
+    data: {
+      type: input.type,
+      personAId: input.personAId,
+      personBId: input.personBId,
+      sortOrder: input.sortOrder ?? 0,
+      label: input.label ?? null,
+    },
+  });
+
+  revalidateRelationshipPaths(input.personAId, input.personBId);
+  return relationship;
 }
 
 export async function deleteRelationship(id: string) {
   const session = await auth();
-  if (!session?.user?.id) throw new Error("未登录");
+  if (!session?.user?.id) {
+    throw new Error("未登录");
+  }
+
+  const relationship = await prisma.relationship.findUnique({
+    where: { id },
+    include: {
+      personA: true,
+      personB: true,
+    },
+  });
+
+  if (
+    !relationship ||
+    relationship.personA.createdBy !== session.user.id ||
+    relationship.personB.createdBy !== session.user.id
+  ) {
+    throw new Error("无权操作");
+  }
+
   await prisma.relationship.delete({ where: { id } });
-  revalidatePath("/tree");
+  revalidateRelationshipPaths(relationship.personAId, relationship.personBId);
 }

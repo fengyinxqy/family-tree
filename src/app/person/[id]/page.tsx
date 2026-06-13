@@ -33,8 +33,9 @@ interface PersonDetailPageProps {
 interface RelationEntry {
   personId: string;
   name: string;
-  relationId: string;
+  relationId: string | null;
   label: string | null;
+  removable?: boolean;
 }
 
 interface TimelineEvent {
@@ -71,44 +72,55 @@ function buildRelationEntries(person: Awaited<ReturnType<typeof getPerson>>) {
   const spouses: RelationEntry[] = [];
   const parents: RelationEntry[] = [];
   const children: RelationEntry[] = [];
+  const siblings: RelationEntry[] = person.siblings.map((sibling) => ({
+    personId: sibling.personId,
+    name: sibling.name,
+    relationId: null,
+    label: sibling.relationLabel,
+    removable: false,
+  }));
 
-  for (const rel of person.relationsA) {
-    if (rel.type === "spouse") {
+  for (const relation of person.relationsA) {
+    if (relation.type === "spouse") {
       spouses.push({
-        personId: rel.personB.id,
-        name: rel.personB.name,
-        relationId: rel.id,
-        label: rel.label,
+        personId: relation.personB.id,
+        name: relation.personB.name,
+        relationId: relation.id,
+        label: relation.label,
+        removable: true,
       });
-    } else if (rel.type === "child") {
+    } else if (relation.type === "child") {
       children.push({
-        personId: rel.personB.id,
-        name: rel.personB.name,
-        relationId: rel.id,
-        label: rel.label,
+        personId: relation.personB.id,
+        name: relation.personB.name,
+        relationId: relation.id,
+        label: relation.label,
+        removable: true,
       });
     }
   }
 
-  for (const rel of person.relationsB) {
-    if (rel.type === "spouse") {
+  for (const relation of person.relationsB) {
+    if (relation.type === "spouse") {
       spouses.push({
-        personId: rel.personA.id,
-        name: rel.personA.name,
-        relationId: rel.id,
-        label: rel.label,
+        personId: relation.personA.id,
+        name: relation.personA.name,
+        relationId: relation.id,
+        label: relation.label,
+        removable: true,
       });
-    } else if (rel.type === "child") {
+    } else if (relation.type === "child") {
       parents.push({
-        personId: rel.personA.id,
-        name: rel.personA.name,
-        relationId: rel.id,
-        label: rel.label,
+        personId: relation.personA.id,
+        name: relation.personA.name,
+        relationId: relation.id,
+        label: relation.label,
+        removable: true,
       });
     }
   }
 
-  return { spouses, parents, children };
+  return { spouses, parents, children, siblings };
 }
 
 function eventTypeLabel(type: string) {
@@ -154,7 +166,7 @@ function buildTimeline(
 
   for (const event of customEvents) {
     timeline.push({
-      type: event.type as TimelineEvent["type"],
+      type: event.type,
       title: event.title || eventTypeLabel(event.type),
       dateLabel: event.dateLabel,
       location: event.location,
@@ -163,11 +175,11 @@ function buildTimeline(
     });
   }
 
-  timeline.sort((a, b) => {
-    if (!a.dateLabel && !b.dateLabel) return 0;
-    if (!a.dateLabel) return 1;
-    if (!b.dateLabel) return -1;
-    return a.dateLabel.localeCompare(b.dateLabel);
+  timeline.sort((left, right) => {
+    if (!left.dateLabel && !right.dateLabel) return 0;
+    if (!left.dateLabel) return 1;
+    if (!right.dateLabel) return -1;
+    return left.dateLabel.localeCompare(right.dateLabel);
   });
 
   return timeline;
@@ -226,7 +238,7 @@ function RelationSection({
       <div className="space-y-2">
         {entries.map((entry) => (
           <div
-            key={entry.relationId}
+            key={entry.relationId ?? `derived-${entry.personId}`}
             className="flex items-center gap-2 rounded-2xl border border-border/60 bg-card/70 px-4 py-3 transition-colors hover:border-border hover:bg-card/90"
           >
             <Link
@@ -241,7 +253,9 @@ function RelationSection({
               </div>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
             </Link>
-            <DeleteRelationButton relationId={entry.relationId} />
+            {entry.removable && entry.relationId ? (
+              <DeleteRelationButton relationId={entry.relationId} />
+            ) : null}
           </div>
         ))}
       </div>
@@ -264,7 +278,7 @@ export default async function PersonDetailPage({ params }: PersonDetailPageProps
     redirect("/tree");
   }
 
-  const { spouses, parents, children } = buildRelationEntries(person);
+  const { spouses, parents, children, siblings } = buildRelationEntries(person);
   const timeline = buildTimeline(person.birthDate, person.deathDate, person.events);
   const genderLabel = person.gender === "male" ? "男" : "女";
   const lifeRange = person.birthDate
@@ -272,7 +286,8 @@ export default async function PersonDetailPage({ params }: PersonDetailPageProps
     : null;
   const hasArchiveFields =
     person.aliases.length > 0 || person.generationLabel || person.nativePlace || person.notes;
-  const hasAnyRelation = spouses.length > 0 || parents.length > 0 || children.length > 0;
+  const hasAnyRelation =
+    spouses.length > 0 || parents.length > 0 || children.length > 0 || siblings.length > 0;
 
   return (
     <AppPage>
@@ -287,7 +302,7 @@ export default async function PersonDetailPage({ params }: PersonDetailPageProps
         </div>
 
         <AppPanel className="bg-card/80 p-1.5">
-          <div className="grid gap-6 rounded-[1.45rem] border border-border/60 bg-background/78 p-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:p-7">
+          <div className="grid gap-6 rounded-[1.45rem] border border-border/60 bg-background/78 p-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:p-7">
             <div className="space-y-5">
               <div className="flex items-start gap-4">
                 <div className="flex size-16 shrink-0 items-center justify-center rounded-3xl border border-primary/20 bg-primary/10 text-primary">
@@ -300,7 +315,7 @@ export default async function PersonDetailPage({ params }: PersonDetailPageProps
                       {person.name}
                     </h1>
                     <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                      在这里查看成员档案、人生事件与家族关系，整体视觉已对齐家族树工作台。
+                      在这里查看人物档案、人生事件与家族关系，并继续维护这位成员在家谱中的位置。
                     </p>
                   </div>
 
@@ -337,7 +352,7 @@ export default async function PersonDetailPage({ params }: PersonDetailPageProps
               )}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
               <div className="rounded-[1.35rem] border border-emerald-200/70 bg-emerald-50/80 p-4 dark:border-emerald-900 dark:bg-emerald-950/35">
                 <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
                   {parents.length}
@@ -356,6 +371,12 @@ export default async function PersonDetailPage({ params }: PersonDetailPageProps
                 </p>
                 <p className="mt-1 text-sm text-sky-900/75 dark:text-sky-100/75">子女关系</p>
               </div>
+              <div className="rounded-[1.35rem] border border-amber-200/70 bg-amber-50/80 p-4 dark:border-amber-900 dark:bg-amber-950/35">
+                <p className="text-2xl font-semibold text-amber-700 dark:text-amber-300">
+                  {siblings.length}
+                </p>
+                <p className="mt-1 text-sm text-amber-900/75 dark:text-amber-100/75">同辈关系</p>
+              </div>
             </div>
           </div>
         </AppPanel>
@@ -366,7 +387,7 @@ export default async function PersonDetailPage({ params }: PersonDetailPageProps
               <DetailSection
                 icon={BookOpen}
                 title="档案信息"
-                description="补充人物身份、来源和维护备注，和编辑页里的字段结构保持一致。"
+                description="补充人物身份、来历和维护备注，和编辑页中的字段结构保持一致。"
               >
                 <div className="grid gap-4 sm:grid-cols-2">
                   {person.aliases.length > 0 ? (
@@ -463,11 +484,11 @@ export default async function PersonDetailPage({ params }: PersonDetailPageProps
             <DetailSection
               icon={Trees}
               title="家族关系"
-              description="关系摘要和成员列表统一整理在同一块区域，便于从详情页继续维护家族树。"
+              description="关系摘要和成员列表统一整理在同一区域，便于从详情页继续维护家族树。"
             >
               {hasAnyRelation ? (
                 <div className="space-y-6">
-                  <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/80 p-4 text-center dark:border-emerald-900 dark:bg-emerald-950/35">
                       <p className="text-xl font-semibold text-emerald-700 dark:text-emerald-300">
                         {parents.length}
@@ -485,6 +506,12 @@ export default async function PersonDetailPage({ params }: PersonDetailPageProps
                         {children.length}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">子女</p>
+                    </div>
+                    <div className="rounded-2xl border border-amber-200/70 bg-amber-50/80 p-4 text-center dark:border-amber-900 dark:bg-amber-950/35">
+                      <p className="text-xl font-semibold text-amber-700 dark:text-amber-300">
+                        {siblings.length}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">同辈</p>
                     </div>
                   </div>
 
@@ -506,13 +533,19 @@ export default async function PersonDetailPage({ params }: PersonDetailPageProps
                     colorClass="text-sky-500"
                     entries={children}
                   />
+                  <RelationSection
+                    title="同辈"
+                    icon={UserRound}
+                    colorClass="text-amber-500"
+                    entries={siblings}
+                  />
                 </div>
               ) : (
                 <div className="rounded-[1.35rem] border border-dashed border-border/60 px-5 py-8 text-center">
                   <Trees className="mx-auto h-5 w-5 text-muted-foreground/60" />
                   <p className="mt-2 text-sm font-medium text-foreground">还没有记录家族关系</p>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                    可以从这里继续添加配偶、父母或子女，让家族树逐步完整起来。
+                    可以从这里继续添加配偶、父母或子女，系统会自动补出可推导的同辈关系。
                   </p>
                   <div className="mt-4 flex justify-center">
                     <AddRelationButton personId={person.id} className="w-full justify-center" />
