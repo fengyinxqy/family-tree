@@ -3,7 +3,8 @@
 import React from "react";
 import Link from "next/link";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { Calendar, UserRound } from "lucide-react";
+import { ArrowRight, UserRound } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { PersonData } from "@/types";
 
 type PersonNodeData = PersonData & {
@@ -15,147 +16,109 @@ type PersonNodeData = PersonData & {
 function PersonNodeComponent({ data, selected }: NodeProps) {
   const person = data as unknown as PersonNodeData;
   const isMale = person.gender === "male";
+  const birthYear = person.birthDate
+    ? new Date(person.birthDate).getFullYear()
+    : "?";
+  const deathYear = person.deathDate
+    ? new Date(person.deathDate).getFullYear()
+    : "";
 
-  // Format dates for display
-  const birthYear = person.birthDate ? new Date(person.birthDate).getFullYear() : "?";
-  const deathYear = person.deathDate ? new Date(person.deathDate).getFullYear() : "";
-
-  const genderColors = isMale
+  const palette = isMale
     ? {
-        bg: "from-sky-50 to-blue-50 dark:from-sky-950/40 dark:to-blue-950/30",
-        border: "border-sky-200/70 dark:border-sky-700/40",
-        accent: "from-sky-500 to-blue-600 dark:from-sky-400 dark:to-blue-500",
-        icon: "text-sky-600 dark:text-sky-400",
-        badge: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
-        ring: "ring-sky-400/60 dark:ring-sky-500/50",
-        hover: "hover:border-sky-300/80 dark:hover:border-sky-600/60",
+        frame:
+          "from-[color-mix(in_oklch,var(--card)_92%,white_8%)] to-[color-mix(in_oklch,var(--secondary)_28%,white_72%)]",
+        border:
+          "border-[color-mix(in_oklch,var(--secondary)_55%,var(--border))]",
+        accent:
+          "bg-[color-mix(in_oklch,var(--secondary)_72%,var(--primary)_28%)]",
       }
     : {
-        bg: "from-rose-50 to-pink-50 dark:from-rose-950/40 dark:to-pink-950/30",
-        border: "border-rose-200/70 dark:border-rose-700/40",
-        accent: "from-rose-400 to-pink-500 dark:from-rose-400 dark:to-pink-400",
-        icon: "text-rose-500 dark:text-rose-400",
-        badge: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
-        ring: "ring-rose-400/60 dark:ring-rose-500/50",
-        hover: "hover:border-rose-300/80 dark:hover:border-rose-600/60",
+        frame:
+          "from-[color-mix(in_oklch,var(--card)_90%,white_10%)] to-[color-mix(in_oklch,var(--accent)_20%,white_80%)]",
+        border: "border-[color-mix(in_oklch,var(--accent)_42%,var(--border))]",
+        accent:
+          "bg-[color-mix(in_oklch,var(--accent)_72%,var(--primary)_28%)]",
       };
 
   return (
     <div
-      className={`
-        group relative
-        transition-all duration-300 ease-out
-        ${selected ? "scale-110 z-30" : "z-10 hover:scale-[1.03]"}
-      `}
-    >
-      {/* Selected ring highlight */}
-      {selected && (
-        <div
-          className={`
-            absolute -inset-1.5 rounded-2xl
-            ring-2 ring-offset-2 ring-offset-transparent
-            ${genderColors.ring}
-            animate-in fade-in zoom-in-95 duration-300
-          `}
-          aria-hidden="true"
-        />
+      className={cn(
+        "group relative transition-transform duration-300 ease-out",
+        selected ? "z-30 scale-[1.04]" : "z-10 hover:scale-[1.02]",
       )}
+    >
+      {selected ? (
+        <div
+          aria-hidden="true"
+          className="absolute -inset-1 rounded-[1.4rem] border border-primary/20 bg-primary/8 shadow-[0_0_0_6px_color-mix(in_oklch,var(--primary)_10%,transparent)]"
+        />
+      ) : null}
 
-      {/* Connection handles */}
       <Handle
         id="top"
         type="target"
         position={Position.Top}
-        className="!bg-amber-400 !border-2 !border-white dark:!border-zinc-800 !w-3 !h-3 !top-[-6px] transition-transform hover:!scale-125"
+        className="!top-[-6px] !size-3 !border-2 !border-background !bg-primary shadow-sm"
       />
       <Handle
         id="bottom"
         type="source"
         position={Position.Bottom}
-        className="!bg-amber-400 !border-2 !border-white dark:!border-zinc-800 !w-3 !h-3 !bottom-[-6px] transition-transform hover:!scale-125"
+        className="!bottom-[-6px] !size-3 !border-2 !border-background !bg-primary shadow-sm"
       />
       <Handle
         id="left"
         type="target"
         position={Position.Left}
-        className="!bg-amber-400 !border-2 !border-white dark:!border-zinc-800 !w-3 !h-3 !left-[-6px] transition-transform hover:!scale-125"
+        className="!left-[-6px] !size-3 !border-2 !border-background !bg-primary shadow-sm"
       />
       <Handle
         id="right"
         type="source"
         position={Position.Right}
-        className="!bg-amber-400 !border-2 !border-white dark:!border-zinc-800 !w-3 !h-3 !right-[-6px] transition-transform hover:!scale-125"
+        className="!right-[-6px] !size-3 !border-2 !border-background !bg-primary shadow-sm"
       />
 
-      {/* Card */}
       <Link
         href={`/person/${person.id}`}
-        className={`
-          flex items-center gap-3 w-[170px] px-3.5 py-3
-          rounded-xl
-          bg-gradient-to-br ${genderColors.bg}
-          border ${genderColors.border}
-          backdrop-blur
-          shadow-md shadow-zinc-200/60 dark:shadow-zinc-900/80
-          ${genderColors.hover}
-          cursor-pointer
-          transition-all duration-200
-          ${selected
-            ? `shadow-xl ${isMale ? "shadow-sky-200/50" : "shadow-rose-200/50"} dark:shadow-zinc-950`
-            : ""
-          }
-        `}
-        onClick={(e) => {
-          // Stop propagation so React Flow doesn't steal the click
-          e.stopPropagation();
+        className={cn(
+          "app-frosted relative flex w-[190px] items-start gap-3 overflow-hidden rounded-[1.35rem] border px-3.5 py-3 text-left shadow-[0_14px_32px_color-mix(in_oklch,var(--foreground)_10%,transparent)] transition-all duration-200",
+          "bg-gradient-to-br",
+          palette.frame,
+          palette.border,
+        )}
+        onClick={(event) => {
+          event.stopPropagation();
         }}
       >
-        {/* Avatar */}
         <div
-          className={`
-            flex h-9 w-9 shrink-0 items-center justify-center
-            rounded-xl
-            bg-gradient-to-br ${genderColors.accent}
-            shadow-md ${isMale ? "shadow-sky-900/15" : "shadow-rose-900/15"}
-            ring-1 ring-white/20 dark:ring-white/10
-          `}
-        >
-          <UserRound className="h-4.5 w-4.5 text-white" strokeWidth={1.8} />
+          aria-hidden="true"
+          className={cn("absolute inset-x-0 top-0 h-1.5", palette.accent)}
+        />
+
+        <div className="mt-1 flex size-10 shrink-0 items-center justify-center rounded-2xl border border-white/50 bg-white/55 text-primary shadow-sm">
+          <UserRound strokeWidth={1.8} />
         </div>
 
-        {/* Info */}
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold leading-tight text-foreground truncate">
+          <p className="truncate font-heading text-[1.02rem] font-semibold tracking-tight text-foreground">
             {person.name}
           </p>
-          <div className="mt-1 flex items-center gap-1.5">
-            <span
-              className={`
-                inline-flex items-center rounded-full px-1.5 py-0.5
-                text-[10px] font-medium leading-none
-                ${genderColors.badge}
-              `}
-            >
+          <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="rounded-full border border-border/80 bg-background/65 px-2 py-0.5">
               {isMale ? "男" : "女"}
             </span>
-            <span className="text-[11px] text-muted-foreground/80 truncate">
-              {birthYear}{deathYear ? `-${deathYear}` : ""}
+            <span className="truncate">
+              {birthYear}
+              {deathYear ? ` - ${deathYear}` : ""}
             </span>
           </div>
         </div>
 
-        {/* Subtle arrow indicator on hover */}
-        <div className="shrink-0 w-4">
-          <svg
-            className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-amber-500/60 transition-colors duration-200"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-        </div>
+        <ArrowRight
+          className="mt-1 size-4 shrink-0 text-muted-foreground/60 transition-colors group-hover:text-primary"
+          strokeWidth={1.8}
+        />
       </Link>
     </div>
   );

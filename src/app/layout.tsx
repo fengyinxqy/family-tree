@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "家谱系统",
-  description: "家族信息管理平台",
+  title: "家谱档案",
+  description: "用于记录、整理与探索家族关系的家谱网站。",
 };
 
 export default function RootLayout({
@@ -29,7 +29,7 @@ export default function RootLayout({
       lang="zh-CN"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-amber-50/30">
+      <body className="app-shell min-h-full flex flex-col">
         <Header />
         {children}
         <Toaster />
