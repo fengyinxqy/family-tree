@@ -7,9 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function RegisterPage() {
-  return (
-    <div className="flex flex-1 items-center justify-center bg-gradient-to-b from-amber-50/40 via-background to-background dark:from-amber-950/20 dark:via-background dark:to-background">
-      <RegisterForm />
-    </div>
-  );
+  return <RegisterForm />;
 }
