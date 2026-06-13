@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import type { PersonData } from "@/types";
 
-type RelationType = "spouse" | "child";
+type RelationType = "spouse" | "child" | "parent";
 
 const RANK_PRESETS = ["长", "次", "三", "幼", "独"];
 
@@ -32,15 +32,18 @@ function ChildLabelField({
   targetPersonId,
   value,
   onChange,
+  childGender,
 }: {
   persons: PersonData[];
   targetPersonId: string;
   value: string;
   onChange: (v: string) => void;
+  childGender?: string;
 }) {
   const [isCustom, setIsCustom] = useState(false);
   const target = persons.find((p) => p.id === targetPersonId);
-  const suffix = target?.gender === "male" ? "子" : "女";
+  const gender = childGender || target?.gender;
+  const suffix = gender === "male" ? "子" : "女";
 
   const presets = RANK_PRESETS.map((r) => `${r}${suffix}`);
 
@@ -155,9 +158,9 @@ export function RelationshipForm({ open, onClose, currentPersonId }: Relationshi
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: relationType,
-          personAId: currentPersonId,
-          personBId: targetPersonId,
+          type: relationType === "parent" ? "child" : relationType,
+          personAId: relationType === "parent" ? targetPersonId : currentPersonId,
+          personBId: relationType === "parent" ? currentPersonId : targetPersonId,
           label: label || null,
         }),
       });
@@ -169,7 +172,7 @@ export function RelationshipForm({ open, onClose, currentPersonId }: Relationshi
         return;
       }
 
-      const relLabel = relationType === "spouse" ? "配偶" : "子女";
+      const relLabel = relationType === "spouse" ? "配偶" : relationType === "child" ? "子女" : "父母";
       toast.success(`${relLabel}关系已添加`);
       router.refresh();
       onClose();
@@ -200,7 +203,7 @@ export function RelationshipForm({ open, onClose, currentPersonId }: Relationshi
                 添加关系
               </DialogTitle>
               <DialogDescription className="text-xs mt-0.5">
-                为当前人物添加配偶或子女关系
+                为当前人物添加配偶、父母或子女关系
               </DialogDescription>
             </div>
           </div>
@@ -227,12 +230,13 @@ export function RelationshipForm({ open, onClose, currentPersonId }: Relationshi
               >
                 <SelectTrigger className="h-10 w-full">
                   <SelectValue>
-                    {relationType === "spouse" ? "配偶" : "子女"}
+                    {relationType === "spouse" ? "配偶" : relationType === "child" ? "子女" : "父母"}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="spouse">配偶</SelectItem>
                   <SelectItem value="child">子女</SelectItem>
+                  <SelectItem value="parent">父母</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -240,7 +244,7 @@ export function RelationshipForm({ open, onClose, currentPersonId }: Relationshi
             {/* Target person */}
             <div className="space-y-1.5">
               <Label className="text-sm font-medium">
-                {relationType === "spouse" ? "选择配偶" : "选择子女"}
+                {relationType === "spouse" ? "选择配偶" : relationType === "child" ? "选择子女" : "选择父母"}
               </Label>
               <Select
                 value={targetPersonId}
@@ -262,7 +266,7 @@ export function RelationshipForm({ open, onClose, currentPersonId }: Relationshi
                         ? persons.find((p) => p.id === targetPersonId)?.name || targetPersonId
                         : filteredPersons.length === 0
                           ? "暂无可选人物"
-                          : `选择${relationType === "spouse" ? "配偶" : "子女"}`}
+                          : `选择${relationType === "spouse" ? "配偶" : relationType === "child" ? "子女" : "父母"}`}
                     </SelectValue>
                   )}
                 </SelectTrigger>
@@ -287,13 +291,24 @@ export function RelationshipForm({ open, onClose, currentPersonId }: Relationshi
               </Select>
             </div>
 
-            {/* Child label field */}
+            {/* Child label field - for child relation */}
             {relationType === "child" && targetPersonId && (
               <ChildLabelField
                 persons={persons}
                 targetPersonId={targetPersonId}
                 value={label}
                 onChange={setLabel}
+              />
+            )}
+
+            {/* Child label field - for parent relation (current person is the child) */}
+            {relationType === "parent" && targetPersonId && (
+              <ChildLabelField
+                persons={persons}
+                targetPersonId={currentPersonId}
+                value={label}
+                onChange={setLabel}
+                childGender={currentGender}
               />
             )}
           </div>

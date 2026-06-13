@@ -85,7 +85,7 @@ export default function RelationshipsPage() {
         <div className="mb-6">
           <h1 className="text-xl font-semibold">管理关系</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            为 <span className="font-medium text-foreground">{person.name}</span> 添加配偶或子女
+            为 <span className="font-medium text-foreground">{person.name}</span> 添加配偶、父母或子女
           </p>
         </div>
 
