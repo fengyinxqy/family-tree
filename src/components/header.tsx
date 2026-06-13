@@ -8,8 +8,8 @@ export async function Header() {
   const session = await auth();
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border/70 bg-background/75 backdrop-blur-xl">
-      <div className="mx-auto flex h-[var(--app-header-height)] w-full max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-50 box-border h-[var(--app-header-height)] border-b border-border/70 bg-background/75 backdrop-blur-xl">
+      <div className="flex h-full w-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <Link href="/tree" className="group flex min-w-0 items-center gap-3">
           <div className="flex size-11 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary transition-colors group-hover:bg-primary/14">
             <ScrollText strokeWidth={1.8} />

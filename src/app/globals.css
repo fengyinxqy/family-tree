@@ -198,6 +198,43 @@
     backdrop-filter: blur(18px);
   }
 
+  *,
+  .app-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--primary) 22%, var(--border))
+      transparent;
+  }
+
+  *::-webkit-scrollbar,
+  .app-scrollbar::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track,
+  .app-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb,
+  .app-scrollbar::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
+    background-color: color-mix(in oklch, var(--primary) 24%, var(--border));
+    transition: background-color 160ms ease;
+  }
+
+  *::-webkit-scrollbar-thumb:hover,
+  .app-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklch, var(--primary) 38%, var(--border));
+  }
+
+  *::-webkit-scrollbar-corner,
+  .app-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
   .text-balance {
     text-wrap: balance;
   }

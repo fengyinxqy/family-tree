@@ -469,13 +469,13 @@ export function AgentPanel() {
         </CardAction>
       </CardHeader>
 
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pt-4">
+      <CardContent className="app-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pt-4">
         <div className="rounded-[1.4rem] border border-border/70 bg-background/55 p-3">
           <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
             <ScrollText className="size-4" />
             conversation log
           </div>
-          <div className="flex min-h-[22rem] max-h-[32rem] flex-col gap-3 overflow-y-auto pr-1">
+          <div className="app-scrollbar flex min-h-[22rem] max-h-[32rem] flex-col gap-3 overflow-y-auto pr-1">
             {messages.map((message) => (
               <MessageBubble key={message.id} message={message} />
             ))}
