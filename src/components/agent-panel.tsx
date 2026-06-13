@@ -13,6 +13,7 @@ import {
   Sparkles,
   TriangleAlert,
   User,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -487,6 +488,7 @@ export function AgentPanel() {
       title: "家谱录入",
       body: text,
     });
+    setIntakeText("");
 
     startSubmitting(async () => {
       try {
@@ -651,6 +653,7 @@ export function AgentPanel() {
       title: "关系提问",
       body: question,
     });
+    setRelationshipQuestion("");
 
     startSubmitting(async () => {
       try {
@@ -752,13 +755,25 @@ export function AgentPanel() {
               <Field>
                 <FieldLabel htmlFor={intakeFieldId}>口述家谱</FieldLabel>
                 <FieldContent>
-                  <Textarea
-                    id={intakeFieldId}
-                    placeholder="例如：我叫王明，父亲王建国，母亲李秀英，我有一个姐姐王丽。"
-                    value={intakeText}
-                    onChange={(event) => setIntakeText(event.target.value)}
-                    className="min-h-32 bg-background/72"
-                  />
+                  <div className="relative">
+                    <Textarea
+                      id={intakeFieldId}
+                      placeholder="例如：我叫王明，父亲王建国，母亲李秀英，我有一个姐姐王丽。"
+                      value={intakeText}
+                      onChange={(event) => setIntakeText(event.target.value)}
+                      className="min-h-32 bg-background/72 pr-8"
+                    />
+                    {intakeText ? (
+                      <button
+                        type="button"
+                        onClick={() => setIntakeText("")}
+                        className="absolute top-2 right-2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                        aria-label="清除输入"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    ) : null}
+                  </div>
                   <FieldDescription>
                     助手会先抽取人物与关系，生成待确认草稿，不会直接写库。
                   </FieldDescription>
@@ -801,13 +816,25 @@ export function AgentPanel() {
               <Field>
                 <FieldLabel htmlFor={relationshipFieldId}>关系问题</FieldLabel>
                 <FieldContent>
-                  <Input
-                    id={relationshipFieldId}
-                    placeholder="例如：王丽和王建国是什么关系？"
-                    value={relationshipQuestion}
-                    onChange={(event) => setRelationshipQuestion(event.target.value)}
-                    className="bg-background/72"
-                  />
+                  <div className="relative">
+                    <Input
+                      id={relationshipFieldId}
+                      placeholder="例如：王丽和王建国是什么关系？"
+                      value={relationshipQuestion}
+                      onChange={(event) => setRelationshipQuestion(event.target.value)}
+                      className="bg-background/72 pr-8"
+                    />
+                    {relationshipQuestion ? (
+                      <button
+                        type="button"
+                        onClick={() => setRelationshipQuestion("")}
+                        className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                        aria-label="清除输入"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    ) : null}
+                  </div>
                   <FieldDescription>
                     适合询问两个人之间的直接或间接亲属关系。
                   </FieldDescription>

@@ -187,7 +187,7 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
 
         <div className="absolute inset-x-0 top-0 z-20 flex flex-col gap-3 p-4 sm:p-6">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-            <Card className="app-panel w-full max-w-2xl overflow-visible border border-border/70 bg-card/78">
+            <Card className="app-panel w-full xl:w-auto overflow-visible border border-border/70 bg-card/78">
               <CardHeader className="gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex size-11 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
