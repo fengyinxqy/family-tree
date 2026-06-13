@@ -1,5 +1,8 @@
 import type { Person, Relationship } from "@prisma/client";
-import type { RelationshipInference, RelationshipPathHop } from "@/lib/agent/types";
+import type {
+  RelationshipInference,
+  RelationshipPathHop,
+} from "@/lib/agent/types";
 
 interface GraphEdge {
   to: string;
@@ -78,25 +81,127 @@ function findShortestPath(
   return [];
 }
 
-function genderedLabel(
-  maleLabel: string,
-  femaleLabel: string,
-  targetGender: string,
-  fallback: string,
+function byTargetGender(
+  targetGender: string | undefined,
+  options: { male: string; female: string; unknown: string },
 ) {
   if (targetGender === "male") {
-    return maleLabel;
+    return options.male;
   }
+
   if (targetGender === "female") {
-    return femaleLabel;
+    return options.female;
   }
-  return fallback;
+
+  return options.unknown;
+}
+
+function directParentLabel(targetGender: string | undefined) {
+  return byTargetGender(targetGender, {
+    male: "父亲",
+    female: "母亲",
+    unknown: "父母",
+  });
+}
+
+function directChildLabel(targetGender: string | undefined) {
+  return byTargetGender(targetGender, {
+    male: "儿子",
+    female: "女儿",
+    unknown: "子女",
+  });
+}
+
+function siblingLabel(targetGender: string | undefined) {
+  return byTargetGender(targetGender, {
+    male: "兄弟",
+    female: "姐妹",
+    unknown: "兄弟姐妹",
+  });
+}
+
+function grandparentLabel(targetGender: string | undefined) {
+  return byTargetGender(targetGender, {
+    male: "祖父",
+    female: "祖母",
+    unknown: "祖辈",
+  });
+}
+
+function grandchildLabel(targetGender: string | undefined) {
+  return byTargetGender(targetGender, {
+    male: "孙子",
+    female: "孙女",
+    unknown: "孙辈",
+  });
+}
+
+function auntOrUncleLabel(targetGender: string | undefined) {
+  return byTargetGender(targetGender, {
+    male: "伯叔舅父辈长辈",
+    female: "姑姨辈长辈",
+    unknown: "父母的兄弟姐妹",
+  });
+}
+
+function nephewOrNieceLabel(
+  branchPersonGender: string | undefined,
+  targetGender: string | undefined,
+) {
+  if (branchPersonGender === "male") {
+    return byTargetGender(targetGender, {
+      male: "侄子",
+      female: "侄女",
+      unknown: "侄辈晚辈",
+    });
+  }
+
+  if (branchPersonGender === "female") {
+    return byTargetGender(targetGender, {
+      male: "外甥",
+      female: "外甥女",
+      unknown: "甥辈晚辈",
+    });
+  }
+
+  return byTargetGender(targetGender, {
+    male: "侄甥辈男晚辈",
+    female: "侄甥辈女晚辈",
+    unknown: "侄甥辈晚辈",
+  });
+}
+
+function cousinLabel(targetGender: string | undefined) {
+  return byTargetGender(targetGender, {
+    male: "堂表兄弟",
+    female: "堂表姐妹",
+    unknown: "堂表亲",
+  });
+}
+
+function formatHopLabels(path: RelationshipPathHop[]) {
+  return path
+    .map((hop) => {
+      if (hop.kind === "spouse") {
+        return "配偶";
+      }
+
+      if (hop.kind === "parent") {
+        return "父母";
+      }
+
+      return "子女";
+    })
+    .join(" -> ");
 }
 
 function describePath(
   path: RelationshipPathHop[],
   peopleById: Map<string, Person>,
-): Pick<RelationshipInference, "relationship" | "inverseRelationship" | "explanation"> {
+): Pick<
+  RelationshipInference,
+  "relationship" | "inverseRelationship" | "explanation"
+> {
   if (path.length === 0) {
     return {
       relationship: "同一人",
@@ -105,88 +210,127 @@ function describePath(
     };
   }
 
-  const target = peopleById.get(path[path.length - 1].toPersonId);
   const source = peopleById.get(path[0].fromPersonId);
-  const kinds = path.map((hop) => hop.kind);
+  const target = peopleById.get(path[path.length - 1].toPersonId);
+  const pattern = path.map((hop) => hop.kind).join(">");
 
-  if (kinds.length === 1) {
-    const kind = kinds[0];
-    if (kind === "spouse") {
-      return {
-        relationship: "配偶",
-        inverseRelationship: "配偶",
-        explanation: "两人之间存在配偶关系。",
-      };
-    }
-
-    if (kind === "parent") {
-      return {
-        relationship: genderedLabel("父亲", "母亲", target?.gender || "", "父母"),
-        inverseRelationship: genderedLabel("儿子", "女儿", source?.gender || "", "子女"),
-        explanation: "目标人物是源人物的父母。",
-      };
-    }
-
+  if (pattern === "spouse") {
     return {
-      relationship: genderedLabel("儿子", "女儿", target?.gender || "", "子女"),
-      inverseRelationship: genderedLabel("父亲", "母亲", source?.gender || "", "父母"),
-      explanation: "目标人物是源人物的子女。",
+      relationship: "配偶",
+      inverseRelationship: "配偶",
+      explanation: "两人之间存在直接配偶关系。",
     };
   }
 
-  if (kinds.join(">") === "parent>child") {
+  if (pattern === "parent") {
     return {
-      relationship: genderedLabel("兄弟", "姐妹", target?.gender || "", "兄弟姐妹"),
-      inverseRelationship: genderedLabel("兄弟", "姐妹", source?.gender || "", "兄弟姐妹"),
-      explanation: "两人共享同一位父母，因此被识别为兄弟姐妹关系。",
+      relationship: directParentLabel(target?.gender),
+      inverseRelationship: directChildLabel(source?.gender),
+      explanation: "目标人物位于源人物上一代。",
     };
   }
 
-  if (kinds.join(">") === "parent>parent") {
+  if (pattern === "child") {
     return {
-      relationship: genderedLabel("祖父", "祖母", target?.gender || "", "祖辈"),
-      inverseRelationship: genderedLabel("孙子", "孙女", source?.gender || "", "孙辈"),
+      relationship: directChildLabel(target?.gender),
+      inverseRelationship: directParentLabel(source?.gender),
+      explanation: "目标人物位于源人物下一代。",
+    };
+  }
+
+  if (pattern === "parent>child") {
+    return {
+      relationship: siblingLabel(target?.gender),
+      inverseRelationship: siblingLabel(source?.gender),
+      explanation: "两人共享同一位父母，因此可识别为兄弟姐妹关系。",
+    };
+  }
+
+  if (pattern === "parent>parent") {
+    return {
+      relationship: grandparentLabel(target?.gender),
+      inverseRelationship: grandchildLabel(source?.gender),
       explanation: "目标人物位于源人物上两代。",
     };
   }
 
-  if (kinds.join(">") === "child>child") {
+  if (pattern === "child>child") {
     return {
-      relationship: genderedLabel("孙子", "孙女", target?.gender || "", "孙辈"),
-      inverseRelationship: genderedLabel("祖父", "祖母", source?.gender || "", "祖辈"),
+      relationship: grandchildLabel(target?.gender),
+      inverseRelationship: grandparentLabel(source?.gender),
       explanation: "目标人物位于源人物下两代。",
     };
   }
 
-  if (kinds.join(">") === "parent>parent>child") {
-    const middle = peopleById.get(path[1].toPersonId);
-    if (middle?.gender === "male") {
-      return {
-        relationship: "叔伯",
-        inverseRelationship: genderedLabel("侄子", "侄女", source?.gender || "", "晚辈亲属"),
-        explanation: "目标人物是源人物父母一辈的男性旁系亲属。",
-      };
-    }
-
+  if (pattern === "child>parent") {
     return {
-      relationship: "姑姨",
-      inverseRelationship: genderedLabel("外甥", "外甥女", source?.gender || "", "晚辈亲属"),
-      explanation: "目标人物是源人物父母一辈的女性旁系亲属。",
+      relationship: "共同子女的另一位家长",
+      inverseRelationship: "共同子女的另一位家长",
+      explanation: "两人通过同一位子女相连，通常表示共同育儿或配偶关系。",
     };
   }
 
-  const hopLabels = path
-    .map((hop) => {
-      if (hop.kind === "spouse") return "配偶";
-      if (hop.kind === "parent") return "父母";
-      return "子女";
-    })
-    .join(" -> ");
+  if (pattern === "parent>child>child") {
+    const branchPerson = peopleById.get(path[1].toPersonId);
+
+    return {
+      relationship: nephewOrNieceLabel(branchPerson?.gender, target?.gender),
+      inverseRelationship: auntOrUncleLabel(source?.gender),
+      explanation:
+        "路径表现为“父母 -> 兄弟姐妹 -> 其子女”，因此目标人物是源人物的侄甥辈晚辈。",
+    };
+  }
+
+  if (pattern === "parent>parent>child") {
+    const sourceParent = peopleById.get(path[0].toPersonId);
+
+    return {
+      relationship: auntOrUncleLabel(target?.gender),
+      inverseRelationship: nephewOrNieceLabel(sourceParent?.gender, source?.gender),
+      explanation:
+        "路径表现为“父母 -> 祖辈 -> 祖辈的另一位子女”，因此目标人物是源人物父母一辈的旁系亲属。",
+    };
+  }
+
+  if (pattern === "parent>parent>child>child") {
+    return {
+      relationship: cousinLabel(target?.gender),
+      inverseRelationship: cousinLabel(source?.gender),
+      explanation:
+        "路径表现为“上到祖辈，再下到另一支子孙”，因此两人可识别为堂表亲关系。",
+    };
+  }
+
+  if (pattern === "spouse>parent") {
+    return {
+      relationship: "姻亲长辈",
+      inverseRelationship: "晚辈姻亲",
+      explanation: "目标人物是配偶一侧的父母辈亲属。",
+    };
+  }
+
+  if (pattern === "spouse>child") {
+    return {
+      relationship: "姻亲晚辈",
+      inverseRelationship: "长辈姻亲",
+      explanation: "目标人物位于配偶一侧的下一代。",
+    };
+  }
+
+  if (pattern === "parent>spouse") {
+    return {
+      relationship: "父母的配偶",
+      inverseRelationship: "配偶的子女",
+      explanation: "目标人物是源人物父母一侧的配偶亲属。",
+    };
+  }
+
+  const hopLabels = formatHopLabels(path);
 
   return {
-    relationship: "存在亲属路径，但暂未命名",
+    relationship: "存在可解释的亲属路径",
     inverseRelationship: null,
-    explanation: `当前引擎找到了这条关系路径：${hopLabels}。`,
+    explanation: `当前引擎找到了这条关系路径：${hopLabels}。该路径尚未映射到更精确的中文称谓。`,
   };
 }
 
