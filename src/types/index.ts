@@ -5,9 +5,24 @@ export interface PersonData {
   birthDate: string | null;
   deathDate: string | null;
   bio: string | null;
+  aliases: string[];
+  generationLabel: string | null;
+  nativePlace: string | null;
+  notes: string | null;
   posX: number | null;
   posY: number | null;
   createdAt: string;
+}
+
+export interface PersonEventData {
+  id: string;
+  personId: string;
+  type: "birth" | "death" | "marriage" | "migration" | "other";
+  title: string | null;
+  dateLabel: string | null;
+  location: string | null;
+  description: string | null;
+  sortOrder: number;
 }
 
 export interface RelationshipData {
@@ -34,4 +49,14 @@ export interface TreeEdge {
   targetHandle?: string;
   type: "spouse" | "parent-child";
   label: string | null;
+}
+
+/** 关系摘要视图模型，在详情页派生 */
+export interface RelationshipSummary {
+  parentCount: number;
+  spouseCount: number;
+  childCount: number;
+  hasParent: boolean;
+  hasSpouse: boolean;
+  hasChild: boolean;
 }

@@ -29,6 +29,10 @@ export default function RelationshipsPage() {
       birthDate: data.birthDate,
       deathDate: data.deathDate,
       bio: data.bio,
+      aliases: data.aliases ?? [],
+      generationLabel: data.generationLabel ?? null,
+      nativePlace: data.nativePlace ?? null,
+      notes: data.notes ?? null,
       posX: data.posX ?? null,
       posY: data.posY ?? null,
       createdAt: data.createdAt,
@@ -51,14 +55,14 @@ export default function RelationshipsPage() {
 
   if (loading || !person) {
     return (
-      <div className="flex min-h-full items-center justify-center">
+      <div className="flex flex-1 items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-600 border-t-transparent" />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-full flex-col px-4 py-8">
+    <div className="flex flex-1 flex-col px-4 py-8">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -left-40 -top-40 h-[600px] w-[600px] rounded-full bg-amber-200/20 blur-3xl dark:bg-amber-800/10" />
         <div

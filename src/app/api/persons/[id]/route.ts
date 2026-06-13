@@ -1,56 +1,77 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { getPerson, updatePerson } from "@/services/person.service";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
   const { id } = await params;
-  const person = await prisma.person.findUnique({
-    where: { id },
-    include: {
-      relationsA: { include: { personB: true } },
-      relationsB: { include: { personA: true } },
-    },
-  });
 
-  if (!person || person.createdBy !== session.user.id) {
+  try {
+    const person = await getPerson(id);
+    return NextResponse.json(person);
+  } catch {
     return NextResponse.json({ error: "不存在" }, { status: 404 });
   }
-
-  return NextResponse.json(person);
 }
 
-export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
   const { id } = await params;
-  const person = await prisma.person.findUnique({ where: { id } });
-  if (!person || person.createdBy !== session.user.id) {
-    return NextResponse.json({ error: "无权操作" }, { status: 403 });
-  }
 
-  const body = await req.json();
-  const updated = await prisma.person.update({ where: { id }, data: body });
-  return NextResponse.json(updated);
+  try {
+    const body = await req.json();
+
+    // 只把 body 中存在的字段传给 service（undefined 的字段 Prisma 会忽略）
+    const data: Record<string, unknown> = {};
+    if (body.name !== undefined) data.name = body.name;
+    if (body.gender !== undefined) data.gender = body.gender;
+    if (body.birthDate !== undefined) data.birthDate = body.birthDate ?? null;
+    if (body.deathDate !== undefined) data.deathDate = body.deathDate ?? null;
+    if (body.bio !== undefined) data.bio = body.bio ?? null;
+    if (body.aliases !== undefined) data.aliases = body.aliases;
+    if (body.generationLabel !== undefined) data.generationLabel = body.generationLabel ?? null;
+    if (body.nativePlace !== undefined) data.nativePlace = body.nativePlace ?? null;
+    if (body.notes !== undefined) data.notes = body.notes ?? null;
+    if (body.events !== undefined) data.events = body.events;
+
+    const updated = await updatePerson(id, data);
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "更新失败";
+    const status = message === "无权操作" ? 403 : 400;
+    return NextResponse.json({ error: message }, { status });
+  }
 }
 
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
   const { id } = await params;
-  const person = await prisma.person.findUnique({ where: { id } });
-  if (!person || person.createdBy !== session.user.id) {
-    return NextResponse.json({ error: "无权操作" }, { status: 403 });
-  }
 
-  await prisma.relationship.deleteMany({
-    where: { OR: [{ personAId: id }, { personBId: id }] },
-  });
-  await prisma.person.delete({ where: { id } });
+  const { deletePerson } = await import("@/services/person.service");
+
+  try {
+    await deletePerson(id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "删除失败";
+    const status = message === "无权操作" ? 403 : 404;
+    return NextResponse.json({ error: message }, { status });
+  }
 
   return NextResponse.json({ success: true });
 }

@@ -170,7 +170,7 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
   }, [nodes.length, shouldFit]);
 
   return (
-    <div className="flex h-[calc(100dvh-var(--app-header-height))] w-full overflow-hidden">
+    <div className="flex flex-1 w-full overflow-hidden">
       <div className="relative min-w-0 flex-1 overflow-hidden">
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -left-32 top-0 h-[380px] w-[380px] rounded-full bg-primary/10 blur-3xl" />

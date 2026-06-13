@@ -18,22 +18,43 @@ model User {
 }
 
 model Person {
-  id         String         @id @default(cuid())
-  name       String
-  gender     String // "male" | "female"
-  birthDate  String?        @map("birth_date")
-  deathDate  String?        @map("death_date")
-  bio        String?
-  posX       Float?         @map("pos_x")
-  posY       Float?         @map("pos_y")
-  createdAt  DateTime       @default(now()) @map("created_at")
-  updatedAt  DateTime       @updatedAt @map("updated_at")
-  createdBy  String         @map("created_by")
-  creator    User           @relation(fields: [createdBy], references: [id])
-  relationsA Relationship[] @relation("PersonA")
-  relationsB Relationship[] @relation("PersonB")
+  id              String         @id @default(cuid())
+  name            String
+  gender          String // "male" | "female"
+  birthDate       String?        @map("birth_date")
+  deathDate       String?        @map("death_date")
+  bio             String?
+  aliases         String[]       @default([])
+  generationLabel String?        @map("generation_label")
+  nativePlace     String?        @map("native_place")
+  notes           String?
+  posX            Float?         @map("pos_x")
+  posY            Float?         @map("pos_y")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  createdBy       String         @map("created_by")
+  creator         User           @relation(fields: [createdBy], references: [id])
+  relationsA      Relationship[] @relation("PersonA")
+  relationsB      Relationship[] @relation("PersonB")
+  events          PersonEvent[]
 
   @@map("persons")
+}
+
+model PersonEvent {
+  id          String   @id @default(cuid())
+  personId    String   @map("person_id")
+  type        String // "birth" | "death" | "marriage" | "migration" | "other"
+  title       String?
+  dateLabel   String?  @map("date_label")
+  location    String?
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  person      Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId, sortOrder], map: "idx_person_events_person_sort")
+  @@map("person_events")
 }
 
 model Relationship {
