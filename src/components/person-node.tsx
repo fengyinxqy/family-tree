@@ -14,8 +14,9 @@ type PersonNodeData = PersonData & {
 };
 
 function PersonNodeComponent({ data, selected }: NodeProps) {
-  const person = data as unknown as PersonNodeData;
+  const person = data as unknown as PersonNodeData & { highlighted?: boolean };
   const isMale = person.gender === "male";
+  const highlighted = person.highlighted ?? false;
   const birthYear = person.birthDate
     ? new Date(person.birthDate).getFullYear()
     : "?";
@@ -51,6 +52,13 @@ function PersonNodeComponent({ data, selected }: NodeProps) {
         <div
           aria-hidden="true"
           className="absolute -inset-1 rounded-[1.4rem] border border-primary/20 bg-primary/8 shadow-[0_0_0_6px_color-mix(in_oklch,var(--primary)_10%,transparent)]"
+        />
+      ) : null}
+
+      {highlighted && !selected ? (
+        <div
+          aria-hidden="true"
+          className="absolute -inset-1.5 animate-pulse rounded-[1.55rem] border-2 border-amber-400/60 bg-amber-300/10 shadow-[0_0_0_10px_color-mix(in_oklch,var(--color-amber-400)_18%,transparent),0_0_24px_4px_color-mix(in_oklch,var(--color-amber-300)_25%,transparent)]"
         />
       ) : null}
 

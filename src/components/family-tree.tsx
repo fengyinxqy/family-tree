@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Background,
   Controls,
@@ -9,12 +9,14 @@ import {
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
+  useReactFlow,
   type Edge,
   type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Plus, ScrollText, Sparkles } from "lucide-react";
 import { FamilyTreeAgentShell } from "./family-tree-agent-shell";
+import { MemberSearch } from "./member-search";
 import { PersonForm } from "./person-form";
 import { PersonNode } from "./person-node";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +52,48 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [shouldFit, setShouldFit] = useState(true);
+  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
+  const { setCenter } = useReactFlow();
+  const highlightedNodeRef = useRef<string | null>(null);
+
+  // Keep ref in sync so applyLayout can preserve highlight state
+  useEffect(() => {
+    highlightedNodeRef.current = highlightedNodeId;
+  }, [highlightedNodeId]);
+
+  // Sync highlighted state to node data
+  useEffect(() => {
+    if (!highlightedNodeId) return;
+    setNodes((nds) =>
+      nds.map((n) => {
+        const isHighlighted = n.id === highlightedNodeId;
+        if ((n.data as Record<string, unknown>).highlighted === isHighlighted) return n;
+        return {
+          ...n,
+          data: { ...(n.data as Record<string, unknown>), highlighted: isHighlighted },
+        };
+      }),
+    );
+  }, [highlightedNodeId, setNodes]);
+
+  const handleSearchSelect = useCallback(
+    (personId: string) => {
+      setHighlightedNodeId(personId);
+      // Find the node's current position and center on it
+      const node = nodes.find((n) => n.id === personId);
+      if (node) {
+        setCenter(node.position.x + 95, node.position.y + 40, {
+          zoom: 1.0,
+          duration: 600,
+        });
+      }
+    },
+    [nodes, setCenter],
+  );
+
+  const handleSearchClear = useCallback(() => {
+    setHighlightedNodeId(null);
+  }, []);
 
   const applyLayout = useCallback(() => {
     if (persons.length === 0) {
@@ -63,11 +107,16 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
       relationships,
     );
 
+    const currentHighlighted = highlightedNodeRef.current;
+
     const flowNodes: Node[] = result.nodes.map((node) => ({
       id: node.id,
       type: "person",
       position: node.position,
-      data: node.data as unknown as Record<string, unknown>,
+      data: {
+        ...(node.data as unknown as Record<string, unknown>),
+        highlighted: node.id === currentHighlighted,
+      },
       draggable: true,
     }));
 
@@ -138,7 +187,7 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
 
         <div className="absolute inset-x-0 top-0 z-20 flex flex-col gap-3 p-4 sm:p-6">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-            <Card className="app-panel w-full max-w-2xl border border-border/70 bg-card/78">
+            <Card className="app-panel w-full max-w-2xl overflow-visible border border-border/70 bg-card/78">
               <CardHeader className="gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex size-11 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
@@ -152,13 +201,21 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">{persons.length} 位成员</Badge>
-                <Badge variant="outline">{relationships.length} 条关系</Badge>
-                <Badge variant="secondary">
-                  <Sparkles data-icon="inline-start" />
-                  支持自然语言录入
-                </Badge>
+              <CardContent className="flex flex-col gap-3">
+                <MemberSearch
+                  persons={persons}
+                  onSelect={handleSearchSelect}
+                  onClear={handleSearchClear}
+                  highlightedNodeId={highlightedNodeId}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">{persons.length} 位成员</Badge>
+                  <Badge variant="outline">{relationships.length} 条关系</Badge>
+                  <Badge variant="secondary">
+                    <Sparkles data-icon="inline-start" />
+                    支持自然语言录入
+                  </Badge>
+                </div>
               </CardContent>
             </Card>
 
