@@ -383,6 +383,34 @@ function RelationshipSummary({ result }: { result: RelationshipAgentResponse }) 
       </CardHeader>
 
       <CardContent className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
+          <div className="rounded-md border border-border/60 bg-muted/40 p-3">
+            <div className="text-sm">
+              <span className="font-semibold">{result.targetPerson.name}</span>
+              <span className="text-muted-foreground"> 是 </span>
+              <span className="font-semibold">{result.sourcePerson.name}</span>
+              <span className="text-muted-foreground"> 的</span>
+            </div>
+            <div className="text-base font-bold mt-1">
+              {result.inference.relationship ?? "已识别"}
+            </div>
+          </div>
+          {result.inference.inverseRelationship &&
+            result.inference.inverseRelationship !== result.inference.relationship && (
+              <div className="rounded-md border border-border/60 bg-muted/40 p-3">
+                <div className="text-sm">
+                  <span className="font-semibold">{result.sourcePerson.name}</span>
+                  <span className="text-muted-foreground"> 是 </span>
+                  <span className="font-semibold">{result.targetPerson.name}</span>
+                  <span className="text-muted-foreground"> 的</span>
+                </div>
+                <div className="text-base font-bold mt-1">
+                  {result.inference.inverseRelationship}
+                </div>
+              </div>
+            )}
+        </div>
+
         <Alert>
           <Bot />
           <AlertTitle>推理说明</AlertTitle>
@@ -638,7 +666,15 @@ export function AgentPanel() {
           title: "关系结果",
           body:
             nextResult.ok && nextResult.inference?.relationship
-              ? `${nextResult.sourcePerson?.name} 与 ${nextResult.targetPerson?.name} 的关系是：${nextResult.inference.relationship}。`
+              ? [
+                  `${nextResult.targetPerson?.name} 是 ${nextResult.sourcePerson?.name} 的${nextResult.inference.relationship}`,
+                  nextResult.inference.inverseRelationship &&
+                  nextResult.inference.inverseRelationship !== nextResult.inference.relationship
+                    ? `${nextResult.sourcePerson?.name} 是 ${nextResult.targetPerson?.name} 的${nextResult.inference.inverseRelationship}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join("\n")
               : nextResult.message,
         });
         toast.success("关系推理完成。");
@@ -676,7 +712,7 @@ export function AgentPanel() {
             <ScrollText className="size-4" />
             conversation log
           </div>
-          <div className="app-scrollbar flex min-h-[22rem] max-h-[32rem] flex-col gap-3 overflow-y-auto pr-1">
+          <div className="app-scrollbar flex min-h-[22rem] max-h-[32rem] flex-col gap-3 overflow-y-auto pr-1 pt-1">
             {messages.map((message) => (
               <MessageBubble key={message.id} message={message} />
             ))}
