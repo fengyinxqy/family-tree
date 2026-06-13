@@ -1,34 +1,34 @@
-import { auth } from "@/lib/auth";
-import { getPerson } from "@/services/person.service";
-import { redirect } from "next/navigation";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import type { ComponentType, ReactNode } from "react";
 import {
   ArrowLeft,
-  Pencil,
-  Calendar,
-  Users,
   Baby,
-  Heart,
-  ChevronRight,
-  UserRound,
-  Trees,
-  MapPin,
-  Tag,
   BookOpen,
+  Calendar,
+  ChevronRight,
   Clock,
+  Heart,
+  MapPin,
+  Pencil,
   Sparkles,
+  Tag,
+  Trees,
+  UserRound,
+  Users,
 } from "lucide-react";
+import { auth } from "@/lib/auth";
+import { AppPage, AppPanel } from "@/components/app-surface";
 import { Button } from "@/components/ui/button";
-import { DeleteButton } from "./delete-button";
 import { AddRelationButton } from "./add-relation-button";
+import { DeleteButton } from "./delete-button";
 import { DeleteRelationButton } from "./delete-relation-button";
+import { getPerson } from "@/services/person.service";
 import type { PersonEventData } from "@/types";
 
 interface PersonDetailPageProps {
   params: Promise<{ id: string }>;
 }
-
-// ── 关系摘要 ───────────────────────────────────────────────
 
 interface RelationEntry {
   personId: string;
@@ -36,6 +36,36 @@ interface RelationEntry {
   relationId: string;
   label: string | null;
 }
+
+interface TimelineEvent {
+  type: "birth" | "death" | "marriage" | "migration" | "other";
+  title: string;
+  dateLabel: string | null;
+  location: string | null;
+  description: string | null;
+  isSystem: boolean;
+}
+
+const EVENT_ICONS: Record<string, ComponentType<{ className?: string }>> = {
+  birth: Sparkles,
+  death: BookOpen,
+  marriage: Heart,
+  migration: MapPin,
+  other: Clock,
+};
+
+const EVENT_STYLES: Record<string, string> = {
+  birth:
+    "border-emerald-300/70 bg-emerald-50/90 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200",
+  death:
+    "border-zinc-300/70 bg-zinc-50/90 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-200",
+  marriage:
+    "border-rose-300/70 bg-rose-50/90 text-rose-800 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200",
+  migration:
+    "border-sky-300/70 bg-sky-50/90 text-sky-800 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-200",
+  other:
+    "border-amber-300/70 bg-amber-50/90 text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200",
+};
 
 function buildRelationEntries(person: Awaited<ReturnType<typeof getPerson>>) {
   const spouses: RelationEntry[] = [];
@@ -81,32 +111,17 @@ function buildRelationEntries(person: Awaited<ReturnType<typeof getPerson>>) {
   return { spouses, parents, children };
 }
 
-// ── 时间线事件 ─────────────────────────────────────────────
+function eventTypeLabel(type: string) {
+  const labels: Record<string, string> = {
+    birth: "出生",
+    death: "离世",
+    marriage: "婚姻",
+    migration: "迁徙",
+    other: "事件",
+  };
 
-interface TimelineEvent {
-  type: "birth" | "death" | "marriage" | "migration" | "other";
-  title: string;
-  dateLabel: string | null;
-  location: string | null;
-  description: string | null;
-  isSystem: boolean; // 是否系统派生
+  return labels[type] ?? "事件";
 }
-
-const EVENT_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  birth: Sparkles,
-  death: BookOpen,
-  marriage: Heart,
-  migration: MapPin,
-  other: Clock,
-};
-
-const EVENT_COLORS: Record<string, string> = {
-  birth: "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
-  death: "border-zinc-300 bg-zinc-50 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300",
-  marriage: "border-pink-300 bg-pink-50 text-pink-700 dark:border-pink-800 dark:bg-pink-950 dark:text-pink-300",
-  migration: "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300",
-  other: "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300",
-};
 
 function buildTimeline(
   birthDate: string | null,
@@ -115,49 +130,39 @@ function buildTimeline(
 ): TimelineEvent[] {
   const timeline: TimelineEvent[] = [];
 
-  // 系统派生的出生事件
-  if (birthDate) {
-    const hasCustomBirth = customEvents.some((e) => e.type === "birth");
-    if (!hasCustomBirth) {
-      timeline.push({
-        type: "birth",
-        title: "出生",
-        dateLabel: birthDate,
-        location: null,
-        description: null,
-        isSystem: true,
-      });
-    }
-  }
-
-  // 系统派生的离世事件
-  if (deathDate) {
-    const hasCustomDeath = customEvents.some((e) => e.type === "death");
-    if (!hasCustomDeath) {
-      timeline.push({
-        type: "death",
-        title: "离世",
-        dateLabel: deathDate,
-        location: null,
-        description: null,
-        isSystem: true,
-      });
-    }
-  }
-
-  // 自定义事件
-  for (const e of customEvents) {
+  if (birthDate && !customEvents.some((event) => event.type === "birth")) {
     timeline.push({
-      type: e.type as TimelineEvent["type"],
-      title: e.title || eventTypeLabel(e.type),
-      dateLabel: e.dateLabel,
-      location: e.location,
-      description: e.description,
+      type: "birth",
+      title: "出生",
+      dateLabel: birthDate,
+      location: null,
+      description: null,
+      isSystem: true,
+    });
+  }
+
+  if (deathDate && !customEvents.some((event) => event.type === "death")) {
+    timeline.push({
+      type: "death",
+      title: "离世",
+      dateLabel: deathDate,
+      location: null,
+      description: null,
+      isSystem: true,
+    });
+  }
+
+  for (const event of customEvents) {
+    timeline.push({
+      type: event.type as TimelineEvent["type"],
+      title: event.title || eventTypeLabel(event.type),
+      dateLabel: event.dateLabel,
+      location: event.location,
+      description: event.description,
       isSystem: false,
     });
   }
 
-  // 按日期排序：有日期的在前，无日期的在后
   timeline.sort((a, b) => {
     if (!a.dateLabel && !b.dateLabel) return 0;
     if (!a.dateLabel) return 1;
@@ -168,18 +173,81 @@ function buildTimeline(
   return timeline;
 }
 
-function eventTypeLabel(type: string): string {
-  const labels: Record<string, string> = {
-    birth: "出生",
-    death: "离世",
-    marriage: "婚姻",
-    migration: "迁徙",
-    other: "事件",
-  };
-  return labels[type] ?? "事件";
+function DetailSection({
+  icon: Icon,
+  title,
+  description,
+  children,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <AppPanel className="bg-card/84 p-1.5">
+      <section className="rounded-[1.45rem] border border-border/60 bg-background/82 p-5 lg:p-6">
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+            <Icon className="size-5" />
+          </div>
+          <div>
+            <h2 className="font-heading text-xl font-semibold text-foreground">{title}</h2>
+            {description ? (
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
+            ) : null}
+          </div>
+        </div>
+        {children}
+      </section>
+    </AppPanel>
+  );
 }
 
-// ── 主页面组件 ─────────────────────────────────────────────
+function RelationSection({
+  title,
+  icon: Icon,
+  colorClass,
+  entries,
+}: {
+  title: string;
+  icon: ComponentType<{ className?: string }>;
+  colorClass: string;
+  entries: RelationEntry[];
+}) {
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Icon className={`h-4 w-4 ${colorClass}`} />
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      </div>
+      <div className="space-y-2">
+        {entries.map((entry) => (
+          <div
+            key={entry.relationId}
+            className="flex items-center gap-2 rounded-2xl border border-border/60 bg-card/70 px-4 py-3 transition-colors hover:border-border hover:bg-card/90"
+          >
+            <Link
+              href={`/person/${entry.personId}`}
+              className="flex min-w-0 flex-1 items-center justify-between gap-3"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">{entry.name}</p>
+                {entry.label ? (
+                  <p className="truncate text-xs text-muted-foreground">{entry.label}</p>
+                ) : null}
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </Link>
+            <DeleteRelationButton relationId={entry.relationId} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default async function PersonDetailPage({ params }: PersonDetailPageProps) {
   const session = await auth();
@@ -199,359 +267,300 @@ export default async function PersonDetailPage({ params }: PersonDetailPageProps
   const { spouses, parents, children } = buildRelationEntries(person);
   const timeline = buildTimeline(person.birthDate, person.deathDate, person.events);
   const genderLabel = person.gender === "male" ? "男" : "女";
-
-  // 关系摘要
-  const hasAnyRelation = spouses.length > 0 || parents.length > 0 || children.length > 0;
+  const lifeRange = person.birthDate
+    ? `${person.birthDate}${person.deathDate ? ` - ${person.deathDate}` : " - 至今"}`
+    : null;
   const hasArchiveFields =
     person.aliases.length > 0 || person.generationLabel || person.nativePlace || person.notes;
+  const hasAnyRelation = spouses.length > 0 || parents.length > 0 || children.length > 0;
 
   return (
-    <div className="flex flex-1 flex-col overflow-y-auto px-4 py-8">
-      {/* Background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -left-40 -top-40 h-[600px] w-[600px] rounded-full bg-amber-200/20 blur-3xl dark:bg-amber-800/10" />
-        <div className="absolute -bottom-32 -right-32 h-[500px] w-[500px] rounded-full bg-emerald-200/15 blur-3xl dark:bg-emerald-800/8" />
-        <div className="absolute left-1/3 top-1/4 h-[300px] w-[300px] rounded-full bg-amber-100/30 blur-2xl dark:bg-amber-700/5" />
-        <div
-          className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
-          style={{
-            backgroundImage: "radial-gradient(circle, currentColor 1px, transparent 1px)",
-            backgroundSize: "48px 48px",
-          }}
-        />
-      </div>
-
-      <div className="relative z-10 mx-auto w-full max-w-[640px]">
-        {/* Navigation */}
-        <div className="mb-6 flex items-center gap-3">
+    <AppPage>
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-wrap items-center gap-3">
           <Link href="/tree">
             <Button variant="ghost" size="sm" className="gap-1.5">
               <ArrowLeft className="h-4 w-4" />
-              族谱
+              返回家族树
             </Button>
           </Link>
         </div>
 
-        {/* Main card */}
-        <div className="rounded-2xl border border-border bg-card/80 p-8 shadow-xl shadow-zinc-200/50 backdrop-blur dark:shadow-zinc-900/60 dark:bg-card/60">
-          {/* Header */}
-          <div className="mb-8 flex items-start gap-5">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-600 to-amber-800 shadow-lg shadow-amber-900/20 ring-1 ring-amber-700/20 dark:from-amber-500 dark:to-amber-700 dark:ring-amber-400/10">
-              <UserRound className="h-8 w-8 text-amber-50" strokeWidth={1.8} />
+        <AppPanel className="bg-card/80 p-1.5">
+          <div className="grid gap-6 rounded-[1.45rem] border border-border/60 bg-background/78 p-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:p-7">
+            <div className="space-y-5">
+              <div className="flex items-start gap-4">
+                <div className="flex size-16 shrink-0 items-center justify-center rounded-3xl border border-primary/20 bg-primary/10 text-primary">
+                  <UserRound className="size-8" strokeWidth={1.8} />
+                </div>
+                <div className="min-w-0 space-y-3">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-primary">人物详情档案</p>
+                    <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
+                      {person.name}
+                    </h1>
+                    <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                      在这里查看成员档案、人生事件与家族关系，整体视觉已对齐家族树工作台。
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                      {genderLabel}
+                    </span>
+                    {lifeRange ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/85 px-3 py-1 text-xs text-muted-foreground">
+                        <Calendar className="h-3.5 w-3.5" />
+                        {lifeRange}
+                      </span>
+                    ) : null}
+                    {person.generationLabel ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/85 px-3 py-1 text-xs text-muted-foreground">
+                        <Tag className="h-3.5 w-3.5" />
+                        {person.generationLabel}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              {person.bio ? (
+                <div className="rounded-[1.35rem] border border-border/60 bg-card/70 px-5 py-4">
+                  <p className="text-sm leading-7 whitespace-pre-wrap text-muted-foreground">
+                    {person.bio}
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-[1.35rem] border border-dashed border-border/60 px-5 py-4 text-sm text-muted-foreground">
+                  还没有填写人物简介，可以去编辑页补充这位成员的生平与背景。
+                </div>
+              )}
             </div>
-            <div className="min-w-0 pt-1">
-              <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">
-                {person.name}
-              </h1>
-              <div className="mt-1.5 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100/60 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                  {genderLabel}
-                </span>
-                {person.birthDate && (
-                  <span className="inline-flex items-center gap-1">
-                    <Calendar className="h-3.5 w-3.5" />
-                    {person.birthDate}
-                    {person.deathDate ? " - " + person.deathDate : " - 至今"}
-                  </span>
-                )}
-                {person.generationLabel && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                    {person.generationLabel}
-                  </span>
-                )}
+
+            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+              <div className="rounded-[1.35rem] border border-emerald-200/70 bg-emerald-50/80 p-4 dark:border-emerald-900 dark:bg-emerald-950/35">
+                <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
+                  {parents.length}
+                </p>
+                <p className="mt-1 text-sm text-emerald-900/75 dark:text-emerald-100/75">父母关系</p>
+              </div>
+              <div className="rounded-[1.35rem] border border-rose-200/70 bg-rose-50/80 p-4 dark:border-rose-900 dark:bg-rose-950/35">
+                <p className="text-2xl font-semibold text-rose-700 dark:text-rose-300">
+                  {spouses.length}
+                </p>
+                <p className="mt-1 text-sm text-rose-900/75 dark:text-rose-100/75">配偶关系</p>
+              </div>
+              <div className="rounded-[1.35rem] border border-sky-200/70 bg-sky-50/80 p-4 dark:border-sky-900 dark:bg-sky-950/35">
+                <p className="text-2xl font-semibold text-sky-700 dark:text-sky-300">
+                  {children.length}
+                </p>
+                <p className="mt-1 text-sm text-sky-900/75 dark:text-sky-100/75">子女关系</p>
               </div>
             </div>
           </div>
+        </AppPanel>
 
-          {/* Bio */}
-          {person.bio && (
-            <div className="mb-8 rounded-xl border border-border/60 bg-muted/30 px-5 py-4">
-              <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
-                {person.bio}
-              </p>
-            </div>
-          )}
-
-          {/* ── 档案信息区 (4.2) ── */}
-          {hasArchiveFields && (
-            <div className="mb-8 rounded-xl border border-border/60 bg-muted/20 px-5 py-4 space-y-3">
-              <h2 className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <BookOpen className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                档案信息
-              </h2>
-
-              {person.aliases.length > 0 && (
-                <div>
-                  <span className="text-xs font-medium text-muted-foreground">别名</span>
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    {person.aliases.map((alias, i) => (
-                      <span
-                        key={i}
-                        className="inline-flex items-center rounded-md bg-amber-100/60 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                      >
-                        {alias}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {person.generationLabel && (
-                <div>
-                  <span className="text-xs font-medium text-muted-foreground">排行/代际</span>
-                  <p className="mt-0.5 text-sm">{person.generationLabel}</p>
-                </div>
-              )}
-
-              {person.nativePlace && (
-                <div>
-                  <span className="text-xs font-medium text-muted-foreground">
-                    <span className="inline-flex items-center gap-1">
-                      <MapPin className="h-3 w-3" />
-                      籍贯
-                    </span>
-                  </span>
-                  <p className="mt-0.5 text-sm">{person.nativePlace}</p>
-                </div>
-              )}
-
-              {person.notes && (
-                <div>
-                  <span className="text-xs font-medium text-muted-foreground">维护备注</span>
-                  <p className="mt-0.5 text-sm whitespace-pre-wrap text-muted-foreground">{person.notes}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── 事件时间线 (4.3) ── */}
-          {timeline.length > 0 && (
-            <div className="mb-8">
-              <h2 className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground">
-                <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                人生事件
-              </h2>
-              <div className="relative pl-5 border-l-2 border-border/60 space-y-4">
-                {timeline.map((event, i) => {
-                  const Icon = EVENT_ICONS[event.type] ?? Clock;
-                  const colorClass = EVENT_COLORS[event.type] ?? EVENT_COLORS.other;
-                  return (
-                    <div key={i} className="relative">
-                      {/* 时间轴圆点 */}
-                      <div
-                        className={
-                          "absolute -left-[calc(1.25rem+5px)] top-1 h-2.5 w-2.5 rounded-full border-2 " +
-                          (event.type === "birth"
-                            ? "border-emerald-500 bg-emerald-100 dark:border-emerald-400 dark:bg-emerald-900"
-                            : event.type === "death"
-                              ? "border-zinc-400 bg-zinc-100 dark:border-zinc-500 dark:bg-zinc-800"
-                              : "border-amber-400 bg-amber-100 dark:border-amber-500 dark:bg-amber-900")
-                        }
-                      />
-
-                      <div className={"rounded-lg border px-4 py-3 " + colorClass}>
-                        <div className="flex items-center gap-2">
-                          <Icon className="h-3.5 w-3.5 shrink-0" />
-                          <span className="text-sm font-medium">{event.title}</span>
-                          {event.isSystem && (
-                            <span className="ml-auto text-[10px] uppercase tracking-wider opacity-60">
-                              系统
-                            </span>
-                          )}
-                          {event.dateLabel && (
-                            <span className="ml-auto text-xs tabular-nums opacity-80">
-                              {event.dateLabel}
-                            </span>
-                          )}
-                        </div>
-                        {(event.location || event.description) && (
-                          <div className="mt-1.5 text-xs opacity-80 space-y-0.5">
-                            {event.location && (
-                              <div className="flex items-center gap-1">
-                                <MapPin className="h-3 w-3" />
-                                {event.location}
-                              </div>
-                            )}
-                            {event.description && <p>{event.description}</p>}
-                          </div>
-                        )}
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-6">
+            {hasArchiveFields ? (
+              <DetailSection
+                icon={BookOpen}
+                title="档案信息"
+                description="补充人物身份、来源和维护备注，和编辑页里的字段结构保持一致。"
+              >
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {person.aliases.length > 0 ? (
+                    <div className="rounded-2xl border border-border/60 bg-card/70 p-4 sm:col-span-2">
+                      <p className="text-xs font-medium tracking-wide text-muted-foreground">别名</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {person.aliases.map((alias) => (
+                          <span
+                            key={alias}
+                            className="inline-flex items-center rounded-full border border-amber-200/70 bg-amber-50/90 px-3 py-1 text-xs font-medium text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                          >
+                            {alias}
+                          </span>
+                        ))}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                  ) : null}
 
-          {/* ── 关系区 (4.1 + 4.4) ── */}
-          <div className="space-y-5">
-            {/* 关系摘要卡 */}
-            {hasAnyRelation && (
-              <div className="mb-2 rounded-xl border border-border/60 bg-muted/20 px-5 py-4">
-                <h2 className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
-                  <Tag className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                  关系摘要
-                </h2>
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div className="rounded-lg bg-emerald-50/60 px-3 py-2 dark:bg-emerald-900/20">
-                    <div className="text-lg font-semibold text-emerald-700 dark:text-emerald-300">
-                      {parents.length}
+                  {person.generationLabel ? (
+                    <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
+                      <p className="text-xs font-medium tracking-wide text-muted-foreground">排行 / 代际</p>
+                      <p className="mt-2 text-sm text-foreground">{person.generationLabel}</p>
                     </div>
-                    <div className="text-xs text-muted-foreground">父母</div>
+                  ) : null}
+
+                  {person.nativePlace ? (
+                    <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
+                      <p className="text-xs font-medium tracking-wide text-muted-foreground">籍贯</p>
+                      <p className="mt-2 text-sm text-foreground">{person.nativePlace}</p>
+                    </div>
+                  ) : null}
+
+                  {person.notes ? (
+                    <div className="rounded-2xl border border-border/60 bg-card/70 p-4 sm:col-span-2">
+                      <p className="text-xs font-medium tracking-wide text-muted-foreground">维护备注</p>
+                      <p className="mt-2 text-sm leading-7 whitespace-pre-wrap text-muted-foreground">
+                        {person.notes}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+              </DetailSection>
+            ) : null}
+
+            {timeline.length > 0 ? (
+              <DetailSection
+                icon={Clock}
+                title="人生事件"
+                description="将出生、离世和补充事件整理成一条时间线，阅读体验更接近人物档案。"
+              >
+                <div className="relative space-y-4 pl-5">
+                  <div className="absolute bottom-0 left-[7px] top-1 w-px bg-border/70" />
+                  {timeline.map((event, index) => {
+                    const Icon = EVENT_ICONS[event.type] ?? Clock;
+                    const style = EVENT_STYLES[event.type] ?? EVENT_STYLES.other;
+
+                    return (
+                      <div key={`${event.type}-${index}`} className="relative">
+                        <div className="absolute -left-[17px] top-5 h-3.5 w-3.5 rounded-full border-2 border-primary/30 bg-background" />
+                        <div className={`rounded-[1.35rem] border px-4 py-3 ${style}`}>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Icon className="h-4 w-4" />
+                            <span className="text-sm font-semibold">{event.title}</span>
+                            {event.isSystem ? (
+                              <span className="rounded-full border border-current/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] opacity-70">
+                                system
+                              </span>
+                            ) : null}
+                            {event.dateLabel ? (
+                              <span className="ml-auto text-xs font-medium opacity-80">
+                                {event.dateLabel}
+                              </span>
+                            ) : null}
+                          </div>
+                          {event.location || event.description ? (
+                            <div className="mt-2 space-y-1.5 text-xs leading-6 opacity-85">
+                              {event.location ? (
+                                <p className="inline-flex items-center gap-1.5">
+                                  <MapPin className="h-3.5 w-3.5" />
+                                  {event.location}
+                                </p>
+                              ) : null}
+                              {event.description ? <p>{event.description}</p> : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </DetailSection>
+            ) : null}
+
+            <DetailSection
+              icon={Trees}
+              title="家族关系"
+              description="关系摘要和成员列表统一整理在同一块区域，便于从详情页继续维护家族树。"
+            >
+              {hasAnyRelation ? (
+                <div className="space-y-6">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/80 p-4 text-center dark:border-emerald-900 dark:bg-emerald-950/35">
+                      <p className="text-xl font-semibold text-emerald-700 dark:text-emerald-300">
+                        {parents.length}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">父母</p>
+                    </div>
+                    <div className="rounded-2xl border border-rose-200/70 bg-rose-50/80 p-4 text-center dark:border-rose-900 dark:bg-rose-950/35">
+                      <p className="text-xl font-semibold text-rose-700 dark:text-rose-300">
+                        {spouses.length}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">配偶</p>
+                    </div>
+                    <div className="rounded-2xl border border-sky-200/70 bg-sky-50/80 p-4 text-center dark:border-sky-900 dark:bg-sky-950/35">
+                      <p className="text-xl font-semibold text-sky-700 dark:text-sky-300">
+                        {children.length}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">子女</p>
+                    </div>
                   </div>
-                  <div className="rounded-lg bg-pink-50/60 px-3 py-2 dark:bg-pink-900/20">
-                    <div className="text-lg font-semibold text-pink-700 dark:text-pink-300">
-                      {spouses.length}
-                    </div>
-                    <div className="text-xs text-muted-foreground">配偶</div>
+
+                  <RelationSection
+                    title="配偶"
+                    icon={Heart}
+                    colorClass="text-rose-500"
+                    entries={spouses}
+                  />
+                  <RelationSection
+                    title="父母"
+                    icon={Users}
+                    colorClass="text-emerald-500"
+                    entries={parents}
+                  />
+                  <RelationSection
+                    title="子女"
+                    icon={Baby}
+                    colorClass="text-sky-500"
+                    entries={children}
+                  />
+                </div>
+              ) : (
+                <div className="rounded-[1.35rem] border border-dashed border-border/60 px-5 py-8 text-center">
+                  <Trees className="mx-auto h-5 w-5 text-muted-foreground/60" />
+                  <p className="mt-2 text-sm font-medium text-foreground">还没有记录家族关系</p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    可以从这里继续添加配偶、父母或子女，让家族树逐步完整起来。
+                  </p>
+                  <div className="mt-4 flex justify-center">
+                    <AddRelationButton personId={person.id} className="w-full justify-center" />
                   </div>
-                  <div className="rounded-lg bg-sky-50/60 px-3 py-2 dark:bg-sky-900/20">
-                    <div className="text-lg font-semibold text-sky-700 dark:text-sky-300">
-                      {children.length}
-                    </div>
-                    <div className="text-xs text-muted-foreground">子女</div>
-                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </DetailSection>
+          </div>
 
-            {/* Spouses */}
-            {spouses.length > 0 && (
-              <div>
-                <h2 className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
-                  <Heart className="h-4 w-4 text-pink-600 dark:text-pink-400" />
-                  配偶
-                </h2>
-                <div className="space-y-1.5">
-                  {spouses.map((spouse) => (
-                    <div
-                      key={spouse.relationId}
-                      className="flex items-center gap-2 rounded-lg border border-border/60 bg-card px-4 py-2.5 text-sm transition-colors hover:bg-pink-50/50 hover:border-pink-200/60 dark:hover:bg-pink-900/10 dark:hover:border-pink-800/30"
-                    >
-                      <Link
-                        href={"/person/" + spouse.personId}
-                        className="flex-1 flex items-center justify-between"
-                      >
-                        <span className="font-medium">
-                          {spouse.name}
-                          {spouse.label && (
-                            <span className="ml-1.5 text-xs text-muted-foreground">
-                              ({spouse.label})
-                            </span>
-                          )}
-                        </span>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      </Link>
-                      <DeleteRelationButton relationId={spouse.relationId} />
-                    </div>
-                  ))}
+          <div className="space-y-6">
+            <DetailSection
+              icon={Tag}
+              title="快捷操作"
+              description="把最常用的维护动作固定在侧边，减少页面来回查找。"
+            >
+              <div className="space-y-3">
+                <Link href={`/person/${person.id}/edit`} className="block">
+                  <Button variant="outline" className="w-full justify-start gap-1.5">
+                    <Pencil className="h-4 w-4" />
+                    编辑人物档案
+                  </Button>
+                </Link>
+                <div className="w-full">
+                  <AddRelationButton personId={person.id} className="w-full justify-start" />
                 </div>
+                <DeleteButton personId={person.id} personName={person.name} />
               </div>
-            )}
+            </DetailSection>
 
-            {/* Parents */}
-            {parents.length > 0 && (
-              <div>
-                <h2 className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
-                  <Users className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  父母
-                </h2>
-                <div className="space-y-1.5">
-                  {parents.map((parent) => (
-                    <div
-                      key={parent.relationId}
-                      className="flex items-center gap-2 rounded-lg border border-border/60 bg-card px-4 py-2.5 text-sm transition-colors hover:bg-emerald-50/50 hover:border-emerald-200/60 dark:hover:bg-emerald-900/10 dark:hover:border-emerald-800/30"
-                    >
-                      <Link
-                        href={"/person/" + parent.personId}
-                        className="flex-1 flex items-center justify-between"
-                      >
-                        <span className="font-medium">
-                          {parent.name}
-                          {parent.label && (
-                            <span className="ml-1.5 text-xs text-muted-foreground">
-                              ({parent.label})
-                            </span>
-                          )}
-                        </span>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      </Link>
-                      <DeleteRelationButton relationId={parent.relationId} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Children */}
-            {children.length > 0 && (
-              <div>
-                <h2 className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
-                  <Baby className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-                  子女
-                </h2>
-                <div className="space-y-1.5">
-                  {children.map((child) => (
-                    <div
-                      key={child.relationId}
-                      className="flex items-center gap-2 rounded-lg border border-border/60 bg-card px-4 py-2.5 text-sm transition-colors hover:bg-sky-50/50 hover:border-sky-200/60 dark:hover:bg-sky-900/10 dark:hover:border-sky-800/30"
-                    >
-                      <Link
-                        href={"/person/" + child.personId}
-                        className="flex-1 flex items-center justify-between"
-                      >
-                        <span className="font-medium">
-                          {child.name}
-                          {child.label && (
-                            <span className="ml-1.5 text-xs text-muted-foreground">
-                              ({child.label})
-                            </span>
-                          )}
-                        </span>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      </Link>
-                      <DeleteRelationButton relationId={child.relationId} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Empty state */}
-            {!hasAnyRelation && (
-              <div className="rounded-xl border border-dashed border-border/60 px-5 py-6 text-center">
-                <Trees className="mx-auto h-5 w-5 text-muted-foreground/60" />
-                <p className="mt-2 text-sm text-muted-foreground">
-                  暂无关系记录，去族谱页面添加关系吧
+            <AppPanel className="bg-card/84 p-1.5">
+              <div className="rounded-[1.45rem] border border-border/60 bg-background/82 p-5">
+                <p className="text-sm font-medium text-foreground">返回家族树</p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  回到总览继续查看其他成员，或从树上继续调整结构。
                 </p>
+                <div className="mt-4">
+                  <Link href="/tree">
+                    <Button variant="ghost" className="w-full justify-start gap-1.5">
+                      <Trees className="h-4 w-4" />
+                      打开家族树工作台
+                    </Button>
+                  </Link>
+                </div>
               </div>
-            )}
+            </AppPanel>
           </div>
-
-          {/* Actions */}
-          <div className="mt-8 flex items-center gap-3 border-t border-border pt-6">
-            <Link href={"/person/" + person.id + "/edit"}>
-              <Button variant="outline" className="gap-1.5">
-                <Pencil className="h-4 w-4" />
-                编辑
-              </Button>
-            </Link>
-            <AddRelationButton personId={person.id} />
-            <DeleteButton personId={person.id} personName={person.name} />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="mt-6 text-center">
-          <Link
-            href="/tree"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-amber-700 hover:underline dark:hover:text-amber-400"
-          >
-            <Trees className="h-4 w-4" />
-            返回家族树
-          </Link>
         </div>
       </div>
-    </div>
+    </AppPage>
   );
 }

@@ -1,12 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Users, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RelationshipForm } from "@/components/relationship-form";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 
-export function AddRelationButton({ personId }: { personId: string }) {
+export function AddRelationButton({
+  personId,
+  className,
+}: {
+  personId: string;
+  className?: string;
+}) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
@@ -14,7 +21,7 @@ export function AddRelationButton({ personId }: { personId: string }) {
     <>
       <Button
         variant="outline"
-        className="gap-1.5"
+        className={cn("gap-1.5", className)}
         onClick={() => setOpen(true)}
       >
         <Plus className="h-4 w-4" />
