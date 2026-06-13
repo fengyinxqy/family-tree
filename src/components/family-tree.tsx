@@ -16,6 +16,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { Plus, ScrollText, Sparkles } from "lucide-react";
 import { FamilyTreeAgentShell } from "./family-tree-agent-shell";
+import { ImportExportPanel } from "./import-export-panel";
 import { MemberSearch } from "./member-search";
 import { PersonForm } from "./person-form";
 import { PersonNode } from "./person-node";
@@ -220,6 +221,7 @@ function FamilyTreeInner({ persons, relationships }: FamilyTreeProps) {
             </Card>
 
             <div className="flex items-center gap-2 self-start">
+              <ImportExportPanel />
               <Button size="lg" onClick={() => setPersonFormOpen(true)}>
                 <Plus data-icon="inline-start" strokeWidth={2} />
                 新增成员

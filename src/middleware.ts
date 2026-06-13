@@ -2,7 +2,14 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-const protectedPaths = ["/tree", "/person", "/api/persons", "/api/relationships", "/api/agent"];
+const protectedPaths = [
+  "/tree",
+  "/person",
+  "/api/persons",
+  "/api/relationships",
+  "/api/agent",
+  "/api/import-export",
+];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -34,5 +41,6 @@ export const config = {
     "/api/persons/:path*",
     "/api/relationships/:path*",
     "/api/agent/:path*",
+    "/api/import-export/:path*",
   ],
 };
