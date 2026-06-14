@@ -1,6 +1,7 @@
-import { prisma } from "@/lib/prisma";
+﻿import { prisma } from "@/lib/prisma";
 import type { IntakeDraft, IntakeExtraction, ExistingPersonContext } from "./types";
 import { intakeDraftSchema } from "./schemas";
+import { syncGenerationNumbersForComponent } from "@/services/relationship.service";
 
 export async function getUserGenealogyContext(userId: string, treeId: string) {
   const [persons, relationships] = await Promise.all([
@@ -657,6 +658,19 @@ export async function applyIntakeDraft(userId: string, treeId: string, draftInpu
       });
 
       createdRelationships.push(createdRelationship);
+    }
+
+    // Sync generation numbers for each connected component
+    const parentRefs = new Set(
+      draft.relationships
+        .filter((r) => r.action === "create" && r.type === "child")
+        .map((r) => r.personARef),
+    );
+    for (const parentRef of parentRefs) {
+      const parentId = refToPersonId.get(parentRef);
+      if (parentId) {
+        await syncGenerationNumbersForComponent(tx, userId, treeId, parentId, 1);
+      }
     }
 
     return {

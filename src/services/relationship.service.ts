@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -35,7 +35,7 @@ async function getOwnedPersons(personAId: string, personBId: string, userId: str
 
 type GenerationSyncClient = Pick<typeof prisma, "person" | "relationship">;
 
-async function syncGenerationNumbersForComponent(
+export async function syncGenerationNumbersForComponent(
   tx: GenerationSyncClient,
   userId: string,
   treeId: string,

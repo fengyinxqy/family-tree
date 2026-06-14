@@ -940,7 +940,7 @@ export default function FamilyTree({
             </div>
 
             {panel === "assistant" ? (
-              <aside className="hidden w-[420px] shrink-0 border-l border-border/60 p-4 xl:block">
+              <aside className="hidden w-[420px] shrink-0 border-l border-border/60 p-4 xl:flex xl:flex-col xl:min-h-0">
                 <AgentPanel
                   selectedPerson={panelPerson}
                   persons={persons}

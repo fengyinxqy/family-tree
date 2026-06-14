@@ -461,9 +461,14 @@ export function AgentPanel({
           </div>
         </div>
 
-        {draft ? <DraftCard draft={draft} onApply={handleApplyDraft} isApplying={isApplying} /> : null}
-        {relationshipResult ? <RelationshipCard result={relationshipResult} /> : null}
       </CardContent>
+
+      {(draft || relationshipResult) ? (
+        <div className="border-t border-border/60 px-(--card-spacing) py-4">
+          {draft ? <DraftCard draft={draft} onApply={handleApplyDraft} isApplying={isApplying} /> : null}
+          {relationshipResult ? <RelationshipCard result={relationshipResult} /> : null}
+        </div>
+      ) : null}
     </Card>
   );
 }
