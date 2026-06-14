@@ -369,16 +369,6 @@ export function RelationshipForm({
             />
           ) : null}
 
-          {relationType === "parent" && targetPersonId ? (
-            <ChildLabelField
-              persons={persons}
-              targetPersonId={currentPersonId}
-              value={label}
-              onChange={setLabel}
-              childGender={currentGender}
-            />
-          ) : null}
-
           <div className="flex gap-3 pt-1">
             <Button
               type="button"

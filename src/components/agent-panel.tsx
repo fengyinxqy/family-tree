@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -7,12 +7,12 @@ import {
   Check,
   GitBranch,
   Loader2,
-  MessageSquareText,
   ScrollText,
   Sparkles,
   TriangleAlert,
   UserRound,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -25,19 +25,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   buildSuggestionChips,
   buildSuggestionHints,
-  type SuggestionChip,
 } from "@/lib/family-graph";
 import type { IntakeDraft } from "@/lib/agent/types";
 import type { RelationshipData, WorkspacePersonData } from "@/types";
-
-type AgentTab = "enrich" | "relationship";
 
 interface RelationshipAgentResponse {
   ok: boolean;
@@ -97,7 +92,7 @@ function MessageLog({ messages, busyLabel }: { messages: AgentMessage[]; busyLab
               }
             >
               <div className="mb-1 text-xs font-medium opacity-75">{message.title}</div>
-              <p className="whitespace-pre-wrap leading-relaxed">{message.body}</p>
+              <div className="max-w-none text-sm [&_p]:leading-relaxed [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_li]:my-0.5 [&_strong]:font-semibold [&_hr]:my-2 [&_hr]:border-border/40 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold"><ReactMarkdown>{message.body}</ReactMarkdown></div>
             </div>
             {message.role === "user" ? (
               <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
@@ -264,17 +259,15 @@ export function AgentPanel({
   onDraftApplied?: () => void;
 }) {
   const router = useRouter();
-  const [currentTab, setCurrentTab] = useState<AgentTab>("enrich");
-  const [enrichText, setEnrichText] = useState("");
-  const [relationshipQuestion, setRelationshipQuestion] = useState("");
+  const [chatInput, setChatInput] = useState("");
   const [draft, setDraft] = useState<IntakeDraft | null>(null);
   const [relationshipResult, setRelationshipResult] = useState<RelationshipAgentResponse | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([
     {
       id: "assistant-welcome",
       role: "assistant",
-      title: "家谱助手",
-      body: "我会围绕当前成员帮你补全资料，也可以根据现有家谱给出关系建议。",
+      title: "谱小助",
+      body: "我是谱小助，可以帮你录入家谱、查询关系、分析资料缺口。直接告诉我你想做什么就好。",
     },
   ]);
   const [isSubmitting, startSubmitting] = useTransition();
@@ -290,63 +283,56 @@ export function AgentPanel({
     setMessages((current) => current.concat(message));
   }
 
-  function summarizeDraft(nextDraft: IntakeDraft) {
-    if (nextDraft.persons.length === 0 && nextDraft.relationships.length === 0) {
-      return "这次输入还没有识别出可写入的人物或关系，可以换一种更具体的描述。";
-    }
-
-    return `识别出 ${nextDraft.persons.length} 位人物、${nextDraft.relationships.length} 条关系。${
-      nextDraft.readyToApply ? "当前草稿可以直接写入。" : "当前草稿还有待确认项。"
-    }`;
-  }
-
-  function handleSuggestionClick(chip: SuggestionChip) {
-    setCurrentTab("relationship");
-    setRelationshipQuestion(chip.question);
-  }
-
-  function handleEnrichSubmit() {
-    const text = enrichText.trim();
+  function handleSendMessage(input?: string) {
+    const text = (input ?? chatInput).trim();
     if (!text) {
-      toast.error("请先输入要补全的家谱描述。");
+      toast.error("请先输入内容。");
       return;
     }
 
+    setChatInput("");
+    setDraft(null);
+    setRelationshipResult(null);
+
     pushMessage({
-      id: `user-enrich-${Date.now()}`,
+      id: `user-${Date.now()}`,
       role: "user",
-      title: selectedPerson ? `补全 ${selectedPerson.name}` : "家谱补全",
+      title: selectedPerson ? `关于 ${selectedPerson.name}` : "家谱助手",
       body: text,
     });
 
     startSubmitting(async () => {
       try {
-        const response = await fetch("/api/agent/intake", {
+        const response = await fetch("/api/agent/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ message: text }),
         });
         const json = await response.json();
 
         if (!response.ok) {
-          throw new Error(json.error || "信息补全请求失败");
+          throw new Error(json.error || "AI 助手请求失败");
         }
 
-        const nextDraft = json as IntakeDraft;
-        setDraft(nextDraft);
+        if (json.draft) {
+          setDraft(json.draft);
+        }
+        if (json.relationshipResult) {
+          setRelationshipResult(json.relationshipResult);
+        }
+
         pushMessage({
-          id: `assistant-enrich-${Date.now()}`,
+          id: `assistant-${Date.now()}`,
           role: "assistant",
-          title: "补全草稿已生成",
-          body: summarizeDraft(nextDraft),
+          title: "谱小助",
+          body: json.content || "已处理完成。",
         });
-        toast.success("补全草稿已生成。");
       } catch (error) {
-        const message = error instanceof Error ? error.message : "信息补全请求失败";
+        const message = error instanceof Error ? error.message : "AI 助手请求失败";
         pushMessage({
-          id: `assistant-enrich-error-${Date.now()}`,
+          id: `assistant-error-${Date.now()}`,
           role: "assistant",
-          title: "补全失败",
+          title: "出错了",
           body: message,
         });
         toast.error(message);
@@ -387,67 +373,14 @@ export function AgentPanel({
     });
   }
 
-  function handleRelationshipSubmit(customQuestion?: string) {
-    const question = (customQuestion ?? relationshipQuestion).trim();
-    if (!question) {
-      toast.error("请先输入关系问题。");
-      return;
-    }
-
-    setRelationshipQuestion(question);
-    pushMessage({
-      id: `user-relationship-${Date.now()}`,
-      role: "user",
-      title: "关系建议",
-      body: question,
-    });
-
-    startSubmitting(async () => {
-      try {
-        const response = await fetch("/api/agent/relationship", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question }),
-        });
-        const json = await response.json();
-
-        if (!response.ok) {
-          throw new Error(json.error || "关系建议请求失败");
-        }
-
-        const nextResult = json as RelationshipAgentResponse;
-        setRelationshipResult(nextResult);
-        pushMessage({
-          id: `assistant-relationship-${Date.now()}`,
-          role: "assistant",
-          title: "关系建议已返回",
-          body:
-            nextResult.ok && nextResult.inference?.relationship
-              ? `${nextResult.targetPerson?.name} 是 ${nextResult.sourcePerson?.name} 的 ${nextResult.inference.relationship}。`
-              : nextResult.message,
-        });
-        toast.success("关系建议已更新。");
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "关系建议请求失败";
-        pushMessage({
-          id: `assistant-relationship-error-${Date.now()}`,
-          role: "assistant",
-          title: "关系建议失败",
-          body: message,
-        });
-        toast.error(message);
-      }
-    });
-  }
-
   return (
-    <Card className="flex h-full min-h-0 flex-col rounded-[1.9rem] border border-border/70 bg-card/86 shadow-none">
+    <Card className="relative flex h-full flex-col rounded-[1.4rem] border-border/70 bg-transparent bg-card/86 shadow-none">
       <CardHeader className="border-b border-border/70">
         <CardTitle className="flex items-center gap-2 text-[1.1rem]">
           <Bot className="text-primary" />
           AI 修谱助手
         </CardTitle>
-        <CardDescription>围绕当前成员做信息补全与关系建议，不包含识别导入。</CardDescription>
+        <CardDescription>直接对话：录入家谱、查询关系、分析资料缺口。</CardDescription>
       </CardHeader>
 
       <CardContent className="app-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pt-4">
@@ -475,83 +408,61 @@ export function AgentPanel({
 
         <MessageLog
           messages={messages}
-          busyLabel={isSubmitting ? "正在整理回复…" : isApplying ? "正在写入家谱…" : null}
+          busyLabel={isSubmitting ? "正在思考…" : isApplying ? "正在写入家谱…" : null}
         />
 
         <Separator />
 
-        <Tabs
-          value={currentTab}
-          onValueChange={(value) => setCurrentTab(value as AgentTab)}
-          className="flex flex-col gap-0"
-        >
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="enrich">信息补全</TabsTrigger>
-            <TabsTrigger value="relationship">关系建议</TabsTrigger>
-          </TabsList>
+        {/* 快捷建议 */}
+        {suggestionChips.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {suggestionChips.map((chip) => (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => handleSendMessage(chip.question)}
+                disabled={isSubmitting}
+                className="rounded-full border border-border/70 bg-card/72 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:opacity-50"
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+        )}
 
-          <TabsContent value="enrich" className="mt-4 space-y-4">
-            <Textarea
-              value={enrichText}
-              onChange={(event) => setEnrichText(event.target.value)}
-              placeholder={
-                selectedPerson
-                  ? `例如：补充 ${selectedPerson.name} 的生平、配偶、子女和迁徙信息。也可以请我找出这个人当前最明显的资料缺口。`
-                  : "例如：帮我补全当前家谱里缺失的人物资料和关系。"
+        {/* 统一聊天输入 */}
+        <div className="space-y-3">
+          <Textarea
+            value={chatInput}
+            onChange={(event) => setChatInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                handleSendMessage();
               }
-              className="min-h-32 bg-background/72"
-            />
-            <div className="flex justify-end">
-              <Button onClick={handleEnrichSubmit} disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <Loader2 data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <Sparkles data-icon="inline-start" />
-                )}
-                生成补全草稿
-              </Button>
-            </div>
-            {draft ? <DraftCard draft={draft} onApply={handleApplyDraft} isApplying={isApplying} /> : null}
-          </TabsContent>
+            }}
+            placeholder={
+              selectedPerson
+                ? `试试：补充 ${selectedPerson.name} 的生平信息 · ${selectedPerson.name} 和XX是什么关系 · ${selectedPerson.name} 还缺什么信息`
+                : "直接告诉我：录入家谱信息、查询人物关系、分析资料缺口……"
+            }
+            disabled={isSubmitting}
+            className="min-h-24 bg-background/72"
+          />
+          <div className="flex justify-end">
+            <Button onClick={() => handleSendMessage()} disabled={isSubmitting}>
+              {isSubmitting ? (
+                <Loader2 data-icon="inline-start" className="animate-spin" />
+              ) : (
+                <Sparkles data-icon="inline-start" />
+              )}
+              发送
+            </Button>
+          </div>
+        </div>
 
-          <TabsContent value="relationship" className="mt-4 space-y-4">
-            <div className="space-y-3">
-              <Input
-                value={relationshipQuestion}
-                onChange={(event) => setRelationshipQuestion(event.target.value)}
-                placeholder={
-                  selectedPerson
-                    ? `例如：${selectedPerson.name} 和某位成员是什么关系？`
-                    : "例如：张三和李四是什么关系？"
-                }
-                className="bg-background/72"
-              />
-              <div className="flex flex-wrap gap-2">
-                {suggestionChips.map((chip) => (
-                  <button
-                    key={chip.id}
-                    type="button"
-                    onClick={() => handleSuggestionClick(chip)}
-                    className="rounded-full border border-border/70 bg-card/72 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
-                  >
-                    {chip.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <Button onClick={() => handleRelationshipSubmit()} disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <Loader2 data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <MessageSquareText data-icon="inline-start" />
-                )}
-                获取关系建议
-              </Button>
-            </div>
-            {relationshipResult ? <RelationshipCard result={relationshipResult} /> : null}
-          </TabsContent>
-        </Tabs>
+        {draft ? <DraftCard draft={draft} onApply={handleApplyDraft} isApplying={isApplying} /> : null}
+        {relationshipResult ? <RelationshipCard result={relationshipResult} /> : null}
       </CardContent>
     </Card>
   );
