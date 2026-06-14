@@ -1,4 +1,4 @@
-ï»¿import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import type { IntakeDraft, IntakeExtraction, ExistingPersonContext } from "./types";
 import { intakeDraftSchema } from "./schemas";
 import { syncGenerationNumbersForComponent } from "@/services/relationship.service";
@@ -24,7 +24,7 @@ export async function getUserGenealogyContext(userId: string, treeId: string) {
 export function toExistingPersonContext(
   persons: Awaited<ReturnType<typeof getUserGenealogyContext>>["persons"],
 ): ExistingPersonContext[] {
-  return persons.map((person) => ({
+  return persons.map((person: Awaited<ReturnType<typeof getUserGenealogyContext>>["persons"][number]) => ({
     id: person.id,
     name: person.name,
     gender: person.gender as "male" | "female",
@@ -116,7 +116,7 @@ export function buildIntakeDraft(
     if (matches.length > 1) {
       ambiguities.push({
         kind: "person_match",
-        message: `"${candidate.name}"åŒ¹é…åˆ°å¤šä¸ªäººç‰©ï¼Œè¯·äººå·¥ç¡®è®¤ã€‚`,
+        message: `"${candidate.name}"Æ¥Åäµ½¶à¸öÈËÎï£¬ÇëÈË¹¤È·ÈÏ¡£`,
         relatedRefs: [candidate.ref],
         options: matches.map((person) => `${person.name} (${person.id})`),
       });
@@ -125,10 +125,10 @@ export function buildIntakeDraft(
     if (candidate.gender === "unknown") {
       ambiguities.push({
         kind: "person_gender_unknown",
-        message: `"${candidate.name}"çš„æ€§åˆ«è¿˜ä¸æ˜ç¡®ï¼Œå»ºè®®å…ˆç¡®è®¤å†è½åº“ã€‚`,
+        message: `"${candidate.name}"µÄĞÔ±ğ»¹²»Ã÷È·£¬½¨ÒéÏÈÈ·ÈÏÔÙÂä¿â¡£`,
         relatedRefs: [candidate.ref],
         options: ["male", "female"],
-        question: `è¯·é—®"${candidate.name}"çš„æ€§åˆ«æ˜¯ï¼Ÿ`,
+        question: `ÇëÎÊ"${candidate.name}"µÄĞÔ±ğÊÇ£¿`,
       });
     }
 
@@ -152,7 +152,7 @@ export function buildIntakeDraft(
     if (relationship.personARef === relationship.personBRef) {
       ambiguities.push({
         kind: "missing_reference",
-        message: `å…³ç³» ${relationship.ref} çš„ä¸¤ç«¯æŒ‡å‘äº†åŒä¸€ä¸ªäººç‰©ï¼Œå·²æ ‡è®°ä¸ºè·³è¿‡ã€‚`,
+        message: `¹ØÏµ ${relationship.ref} µÄÁ½¶ËÖ¸ÏòÁËÍ¬Ò»¸öÈËÎï£¬ÒÑ±ê¼ÇÎªÌø¹ı¡£`,
         relatedRefs: [relationship.personARef],
         options: [],
       });
@@ -172,7 +172,7 @@ export function buildIntakeDraft(
     if (!personRefSet.has(relationship.personARef) || !personRefSet.has(relationship.personBRef)) {
       ambiguities.push({
         kind: "missing_reference",
-        message: `å…³ç³» ${relationship.ref} å¼•ç”¨äº†ä¸å­˜åœ¨çš„äººç‰©å¼•ç”¨ã€‚`,
+        message: `¹ØÏµ ${relationship.ref} ÒıÓÃÁË²»´æÔÚµÄÈËÎïÒıÓÃ¡£`,
         relatedRefs: [relationship.personARef, relationship.personBRef],
         options: persons.map((person) => `${person.ref}: ${person.name}`),
       });
@@ -215,7 +215,7 @@ export function buildIntakeDraft(
     if (duplicate) {
       ambiguities.push({
         kind: "duplicate_relationship",
-        message: `å…³ç³» ${relationship.ref} ä¸ç°æœ‰æ•°æ®é‡å¤ï¼Œå·²æ ‡è®°ä¸ºè·³è¿‡ã€‚`,
+        message: `¹ØÏµ ${relationship.ref} ÓëÏÖÓĞÊı¾İÖØ¸´£¬ÒÑ±ê¼ÇÎªÌø¹ı¡£`,
         relatedRefs: [relationship.personARef, relationship.personBRef],
         options: [],
       });
@@ -257,15 +257,15 @@ export function buildIntakeDraft(
 }
 
 /**
- * å°† LLM å¢é‡æå–ç»“æœæŒ‰å­—æ®µçº§è§„åˆ™åˆå¹¶åˆ°å‰è½®è‰ç¨¿ã€‚
+ * ½« LLM ÔöÁ¿ÌáÈ¡½á¹û°´×Ö¶Î¼¶¹æÔòºÏ²¢µ½Ç°ÂÖ²İ¸å¡£
  *
- * åˆå¹¶è§„åˆ™ï¼š
- * 1. å¤ç”¨ç»“æœä¸å¯å›é€€ï¼šaction="reuse" çš„äººç‰©ä¿ç•™ existingPersonIdï¼Œä¸å…è®¸å˜ä¸º create
- * 2. ä¸æ­§ä¹‰ç›¸å…³çš„å­—æ®µå…è®¸è¡¥å…¨ï¼šaction="create" çš„äººç‰©å¯è¡¥å…¨ gender/birthDate/deathDate/bio/evidence
- * 3. å…³ç³»æ¢å¤ï¼šæ­¤å‰å›  missing_reference ç­‰åŸå›  skip çš„å…³ç³»ï¼Œè‹¥è¡¥å……æ–‡æœ¬è¡¥é½å¼•ç”¨åˆ™å¯æ¢å¤ä¸º create
- * 4. æ–°æ¡ç›®è¿½åŠ ï¼šæ–°å¢çš„äººç‰©å’Œå…³ç³»ç›´æ¥è¿½åŠ 
- * 5. æ­§ä¹‰ç®¡ç†ï¼šå·²è§£å†³çš„æ­§ä¹‰ç§»é™¤ï¼Œæ–°å‡ºç°çš„æ­§ä¹‰è¿½åŠ 
- * 6. é‡æ–°è®¡ç®— readyToApply
+ * ºÏ²¢¹æÔò£º
+ * 1. ¸´ÓÃ½á¹û²»¿É»ØÍË£ºaction="reuse" µÄÈËÎï±£Áô existingPersonId£¬²»ÔÊĞí±äÎª create
+ * 2. ÓëÆçÒåÏà¹ØµÄ×Ö¶ÎÔÊĞí²¹È«£ºaction="create" µÄÈËÎï¿É²¹È« gender/birthDate/deathDate/bio/evidence
+ * 3. ¹ØÏµ»Ö¸´£º´ËÇ°Òò missing_reference µÈÔ­Òò skip µÄ¹ØÏµ£¬Èô²¹³äÎÄ±¾²¹ÆëÒıÓÃÔò¿É»Ö¸´Îª create
+ * 4. ĞÂÌõÄ¿×·¼Ó£ºĞÂÔöµÄÈËÎïºÍ¹ØÏµÖ±½Ó×·¼Ó
+ * 5. ÆçÒå¹ÜÀí£ºÒÑ½â¾öµÄÆçÒåÒÆ³ı£¬ĞÂ³öÏÖµÄÆçÒå×·¼Ó
+ * 6. ÖØĞÂ¼ÆËã readyToApply
  */
 export function mergeDraftWithClarification(
   previousDraft: IntakeDraft,
@@ -280,7 +280,7 @@ export function mergeDraftWithClarification(
   const updatedPersonRefs = new Set<string>();
   const updatedRelationshipRefs = new Set<string>();
 
-  // --- 1. å¤„ç†å¢é‡äººç‰© ---
+  // --- 1. ´¦ÀíÔöÁ¿ÈËÎï ---
   const mergedPersons: IntakeDraft["persons"] = [];
 
   for (const incPerson of incrementalExtraction.persons) {
@@ -290,10 +290,10 @@ export function mergeDraftWithClarification(
       updatedPersonRefs.add(incPerson.ref);
 
       if (prev.action === "reuse") {
-        // è§„åˆ™ 1: å¤ç”¨ç»“æœä¸å¯å›é€€
+        // ¹æÔò 1: ¸´ÓÃ½á¹û²»¿É»ØÍË
         mergedPersons.push({
           ...prev,
-          // å…è®¸è¡¥å…¨ä¹‹å‰æœªçŸ¥çš„å­—æ®µ
+          // ÔÊĞí²¹È«Ö®Ç°Î´ÖªµÄ×Ö¶Î
           gender: prev.gender === "unknown" && incPerson.gender !== "unknown" ? incPerson.gender : prev.gender,
           birthDate: prev.birthDate ?? incPerson.birthDate,
           deathDate: prev.deathDate ?? incPerson.deathDate,
@@ -301,7 +301,7 @@ export function mergeDraftWithClarification(
           evidence: incPerson.evidence || prev.evidence,
         });
       } else {
-        // è§„åˆ™ 2: create äººç‰©å…è®¸è¡¥å…¨å­—æ®µï¼Œå¹¶é‡æ–°æ£€æŸ¥æ˜¯å¦å­˜åœ¨å”¯ä¸€åŒ¹é…
+        // ¹æÔò 2: create ÈËÎïÔÊĞí²¹È«×Ö¶Î£¬²¢ÖØĞÂ¼ì²éÊÇ·ñ´æÔÚÎ¨Ò»Æ¥Åä
         const matches = findPersonsByName(existingPersons, incPerson.name);
         const canReuse = matches.length === 1;
 
@@ -310,7 +310,7 @@ export function mergeDraftWithClarification(
           action: canReuse ? "reuse" : "create",
           existingPersonId: canReuse ? matches[0].id : null,
           name: prev.name,
-          // è¡¥å…¨å­—æ®µ
+          // ²¹È«×Ö¶Î
           gender:
             prev.gender === "unknown" && incPerson.gender !== "unknown"
               ? incPerson.gender
@@ -325,7 +325,7 @@ export function mergeDraftWithClarification(
       continue;
     }
 
-    // å°è¯•é€šè¿‡ name åŒ¹é…å‰ä¸€è½® draft ä¸­å°šæœªè¢«æ›´æ–°çš„ create äººç‰©
+    // ³¢ÊÔÍ¨¹ı name Æ¥ÅäÇ°Ò»ÂÖ draft ÖĞÉĞÎ´±»¸üĞÂµÄ create ÈËÎï
     const nameMatch = [...prevPersonByRef.values()].find(
       (p) =>
         p.name === incPerson.name &&
@@ -356,7 +356,7 @@ export function mergeDraftWithClarification(
       continue;
     }
 
-    // å…¨æ–°äººç‰©
+    // È«ĞÂÈËÎï
     const matches = findPersonsByName(existingPersons, incPerson.name);
     const canReuse = matches.length === 1;
 
@@ -373,14 +373,14 @@ export function mergeDraftWithClarification(
     });
   }
 
-  // ä¿ç•™æœªæ›´æ–°çš„åŸè‰ç¨¿äººç‰©
+  // ±£ÁôÎ´¸üĞÂµÄÔ­²İ¸åÈËÎï
   for (const prev of previousDraft.persons) {
     if (!updatedPersonRefs.has(prev.ref)) {
       mergedPersons.push(prev);
     }
   }
 
-  // --- 2. å¤„ç†å¢é‡å…³ç³» ---
+  // --- 2. ´¦ÀíÔöÁ¿¹ØÏµ ---
   const mergedRelationships: IntakeDraft["relationships"] = [];
   const personRefSet = new Set(mergedPersons.map((p) => p.ref));
 
@@ -391,7 +391,7 @@ export function mergeDraftWithClarification(
       updatedRelationshipRefs.add(incRel.ref);
 
       if (prev.action === "skip" && prev.reason === "missing_reference") {
-        // è§„åˆ™ 3: æ­¤å‰å›  missing_reference skip çš„å…³ç³»ï¼Œè‹¥ç°åœ¨å¼•ç”¨å·²è¡¥å…¨åˆ™æ¢å¤ä¸º create
+        // ¹æÔò 3: ´ËÇ°Òò missing_reference skip µÄ¹ØÏµ£¬ÈôÏÖÔÚÒıÓÃÒÑ²¹È«Ôò»Ö¸´Îª create
         const canRestore =
           personRefSet.has(incRel.personARef) && personRefSet.has(incRel.personBRef);
 
@@ -406,7 +406,7 @@ export function mergeDraftWithClarification(
           reason: canRestore ? null : prev.reason,
         });
       } else if (prev.action === "skip" && prev.reason === "self_reference") {
-        // self_reference ä¹Ÿå¯ä»¥è¢«ä¿®æ­£
+        // self_reference Ò²¿ÉÒÔ±»ĞŞÕı
         const isFixed = incRel.personARef !== incRel.personBRef;
         mergedRelationships.push({
           ...prev,
@@ -419,7 +419,7 @@ export function mergeDraftWithClarification(
           reason: isFixed ? null : "self_reference",
         });
       } else {
-        // å·²ç¡®è®¤çš„å…³ç³»ä¿æŒä¸å˜
+        // ÒÑÈ·ÈÏµÄ¹ØÏµ±£³Ö²»±ä
         mergedRelationships.push({
           ...prev,
           type: incRel.type,
@@ -433,7 +433,7 @@ export function mergeDraftWithClarification(
       continue;
     }
 
-    // å…¨æ–°å…³ç³»
+    // È«ĞÂ¹ØÏµ
     const personA = mergedPersons.find((p) => p.ref === incRel.personARef);
     const personB = mergedPersons.find((p) => p.ref === incRel.personBRef);
 
@@ -465,7 +465,7 @@ export function mergeDraftWithClarification(
       continue;
     }
 
-    // æ£€æµ‹é‡å¤
+    // ¼ì²âÖØ¸´
     const existingPersonAId = personA?.existingPersonId;
     const existingPersonBId = personB?.existingPersonId;
     const duplicate =
@@ -500,36 +500,36 @@ export function mergeDraftWithClarification(
     });
   }
 
-  // ä¿ç•™æœªæ›´æ–°çš„åŸè‰ç¨¿å…³ç³»
+  // ±£ÁôÎ´¸üĞÂµÄÔ­²İ¸å¹ØÏµ
   for (const prev of previousDraft.relationships) {
     if (!updatedRelationshipRefs.has(prev.ref)) {
       mergedRelationships.push(prev);
     }
   }
 
-  // --- 3. å¤„ç†æ­§ä¹‰ ---
+  // --- 3. ´¦ÀíÆçÒå ---
   const mergedAmbiguities: IntakeDraft["ambiguities"] = [];
 
-  // æ£€æŸ¥å‰è½®æ­§ä¹‰æ˜¯å¦å·²è§£å†³
+  // ¼ì²éÇ°ÂÖÆçÒåÊÇ·ñÒÑ½â¾ö
   for (const ambiguity of previousDraft.ambiguities) {
     const isResolved = (() => {
       switch (ambiguity.kind) {
         case "person_match": {
-          // å¦‚æœå…³è”çš„äººç‰©ç°åœ¨ action å˜ä¸º "reuse"ï¼Œåˆ™å·²è§£å†³
+          // Èç¹û¹ØÁªµÄÈËÎïÏÖÔÚ action ±äÎª "reuse"£¬ÔòÒÑ½â¾ö
           return ambiguity.relatedRefs.some((ref) => {
             const person = mergedPersons.find((p) => p.ref === ref);
             return person?.action === "reuse";
           });
         }
         case "person_gender_unknown": {
-          // å¦‚æœå…³è”çš„äººç‰©æ€§åˆ«ä¸å†æ˜¯ unknownï¼Œåˆ™å·²è§£å†³
+          // Èç¹û¹ØÁªµÄÈËÎïĞÔ±ğ²»ÔÙÊÇ unknown£¬ÔòÒÑ½â¾ö
           return ambiguity.relatedRefs.some((ref) => {
             const person = mergedPersons.find((p) => p.ref === ref);
             return person && person.gender !== "unknown";
           });
         }
         case "missing_reference": {
-          // å¦‚æœå…³è”çš„å…³ç³»ä¸å†æ˜¯ skipï¼ˆreason ä¸æ˜¯ missing_referenceï¼‰ï¼Œåˆ™å·²è§£å†³
+          // Èç¹û¹ØÁªµÄ¹ØÏµ²»ÔÙÊÇ skip£¨reason ²»ÊÇ missing_reference£©£¬ÔòÒÑ½â¾ö
           return ambiguity.relatedRefs.some((ref) => {
             const rel = mergedRelationships.find((r) => r.ref === ref);
             return rel && !(rel.action === "skip" && rel.reason === "missing_reference");
@@ -537,14 +537,14 @@ export function mergeDraftWithClarification(
         }
         case "generation_unclear":
         case "relationship_direction_unknown": {
-          // å¦‚æœå…³è”çš„å…³ç³»ä¸å†æ˜¯ skipï¼Œåˆ™å¯èƒ½å·²è§£å†³
+          // Èç¹û¹ØÁªµÄ¹ØÏµ²»ÔÙÊÇ skip£¬Ôò¿ÉÄÜÒÑ½â¾ö
           return ambiguity.relatedRefs.some((ref) => {
             const rel = mergedRelationships.find((r) => r.ref === ref);
             return rel && rel.action !== "skip";
           });
         }
         case "duplicate_relationship": {
-          // é‡å¤å…³ç³»é€šå¸¸ä¸å¯é€šè¿‡æ¾„æ¸…è§£å†³ï¼Œä¿ç•™
+          // ÖØ¸´¹ØÏµÍ¨³£²»¿ÉÍ¨¹ı³ÎÇå½â¾ö£¬±£Áô
           return false;
         }
         default:
@@ -557,15 +557,15 @@ export function mergeDraftWithClarification(
     }
   }
 
-  // è¿½åŠ å¢é‡æå–ä¸­çš„æ–°æ­§ä¹‰ï¼ˆè½¬ä¸ºå­—ç¬¦ä¸²çš„è½¬å›æ¥ï¼‰
+  // ×·¼ÓÔöÁ¿ÌáÈ¡ÖĞµÄĞÂÆçÒå£¨×ªÎª×Ö·û´®µÄ×ª»ØÀ´£©
   for (const ambiguityText of incrementalExtraction.ambiguities) {
-    // é¿å…é‡å¤æ·»åŠ ç›¸åŒçš„æ­§ä¹‰æ–‡æœ¬
+    // ±ÜÃâÖØ¸´Ìí¼ÓÏàÍ¬µÄÆçÒåÎÄ±¾
     const alreadyExists = mergedAmbiguities.some(
       (a) => a.message === ambiguityText,
     );
     if (!alreadyExists) {
       mergedAmbiguities.push({
-        kind: "missing_reference", // é»˜è®¤ç±»å‹ï¼ŒLLM çš„ ambiguities æ˜¯å­—ç¬¦ä¸²æ•°ç»„
+        kind: "missing_reference", // Ä¬ÈÏÀàĞÍ£¬LLM µÄ ambiguities ÊÇ×Ö·û´®Êı×é
         message: ambiguityText,
         relatedRefs: [],
         options: [],
@@ -573,7 +573,7 @@ export function mergeDraftWithClarification(
     }
   }
 
-  // --- 4. æ„å»ºåˆå¹¶ç»“æœ ---
+  // --- 4. ¹¹½¨ºÏ²¢½á¹û ---
   const mergedDraft = {
     summary: incrementalExtraction.summary || previousDraft.summary,
     persons: mergedPersons,
@@ -585,10 +585,10 @@ export function mergeDraftWithClarification(
         (q) => !previousDraft.questions.includes(q),
       ),
     ],
-    readyToApply: false, // ä¸‹é¢é‡æ–°è®¡ç®—
+    readyToApply: false, // ÏÂÃæÖØĞÂ¼ÆËã
   };
 
-  // é‡æ–°è®¡ç®— readyToApply
+  // ÖØĞÂ¼ÆËã readyToApply
   mergedDraft.readyToApply =
     mergedDraft.ambiguities.length === 0 &&
     (mergedDraft.persons.length > 0 || mergedDraft.relationships.length > 0);
