@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bot,
@@ -65,6 +65,16 @@ interface AgentMessage {
   title: string;
   body: string;
 }
+
+type AgentStreamEvent =
+  | { type: "delta"; content: string }
+  | {
+      type: "metadata";
+      draft?: IntakeDraft;
+      relationshipResult?: RelationshipAgentResponse;
+    }
+  | { type: "done" }
+  | { type: "error"; error: string };
 
 function MessageLog({ messages, busyLabel }: { messages: AgentMessage[]; busyLabel: string | null }) {
   return (
@@ -272,6 +282,7 @@ export function AgentPanel({
   ]);
   const [isSubmitting, startSubmitting] = useTransition();
   const [isApplying, startApplying] = useTransition();
+  const messageIdCounter = useRef(0);
 
   const suggestionChips = useMemo(() => buildSuggestionChips(selectedPerson), [selectedPerson]);
   const suggestionHints = useMemo(
@@ -281,6 +292,77 @@ export function AgentPanel({
 
   function pushMessage(message: AgentMessage) {
     setMessages((current) => current.concat(message));
+  }
+
+  function nextMessageId(prefix: string) {
+    messageIdCounter.current += 1;
+    return `${prefix}-${messageIdCounter.current}`;
+  }
+
+  function updateMessageBody(id: string, updater: (body: string) => string) {
+    setMessages((current) =>
+      current.map((message) =>
+        message.id === id
+          ? { ...message, body: updater(message.body) }
+          : message,
+      ),
+    );
+  }
+
+  async function readAgentStream(response: Response, assistantMessageId: string) {
+    if (!response.body) {
+      throw new Error("AI 助手没有返回可读取的流。");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    const handleLine = (line: string) => {
+      const event = JSON.parse(line) as AgentStreamEvent;
+
+      if (event.type === "delta") {
+        updateMessageBody(assistantMessageId, (body) => body + event.content);
+        return;
+      }
+
+      if (event.type === "metadata") {
+        if (event.draft) {
+          setDraft(event.draft);
+        }
+        if (event.relationshipResult) {
+          setRelationshipResult(event.relationshipResult);
+        }
+        return;
+      }
+
+      if (event.type === "error") {
+        throw new Error(event.error || "AI 助手请求失败");
+      }
+    };
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed) {
+          handleLine(trimmed);
+        }
+      }
+    }
+
+    const remaining = buffer.trim();
+    if (remaining) {
+      handleLine(remaining);
+    }
   }
 
   function handleSendMessage(input?: string) {
@@ -293,12 +375,19 @@ export function AgentPanel({
     setChatInput("");
     setDraft(null);
     setRelationshipResult(null);
+    const assistantMessageId = nextMessageId("assistant");
 
     pushMessage({
-      id: `user-${Date.now()}`,
+      id: nextMessageId("user"),
       role: "user",
       title: selectedPerson ? `关于 ${selectedPerson.name}` : "家谱助手",
       body: text,
+    });
+    pushMessage({
+      id: assistantMessageId,
+      role: "assistant",
+      title: "谱小助",
+      body: "",
     });
 
     startSubmitting(async () => {
@@ -308,33 +397,23 @@ export function AgentPanel({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: text }),
         });
-        const json = await response.json();
 
         if (!response.ok) {
+          const json = await response.json();
           throw new Error(json.error || "AI 助手请求失败");
         }
 
-        if (json.draft) {
-          setDraft(json.draft);
-        }
-        if (json.relationshipResult) {
-          setRelationshipResult(json.relationshipResult);
-        }
-
-        pushMessage({
-          id: `assistant-${Date.now()}`,
-          role: "assistant",
-          title: "谱小助",
-          body: json.content || "已处理完成。",
-        });
+        await readAgentStream(response, assistantMessageId);
+        updateMessageBody(assistantMessageId, (body) => body || "已处理完成。");
       } catch (error) {
         const message = error instanceof Error ? error.message : "AI 助手请求失败";
-        pushMessage({
-          id: `assistant-error-${Date.now()}`,
-          role: "assistant",
-          title: "出错了",
-          body: message,
-        });
+        setMessages((current) =>
+          current.map((item) =>
+            item.id === assistantMessageId
+              ? { ...item, title: "出错了", body: message }
+              : item,
+          ),
+        );
         toast.error(message);
       }
     });

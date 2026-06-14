@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { createChatCompletion } from "./openai";
-import type { ChatMessage, ChatTool } from "./openai";
+import { createChatCompletion, createChatCompletionStream } from "./openai";
+import type { ChatCompletionStreamDelta, ChatMessage, ChatTool } from "./openai";
 import { runIntakeAgent } from "./intake-agent";
 import { runRelationshipAgent } from "./relationship-agent";
-import { getUserGenealogyContext, toExistingPersonContext, findPersonsByName, buildIntakeDraft } from "./tools";
+import { getUserGenealogyContext, toExistingPersonContext, findPersonsByName } from "./tools";
 import type { IntakeDraft } from "./types";
 
 // ─── Tool Definitions ───────────────────────────────────────────────
@@ -301,6 +301,36 @@ export interface UnifiedAgentMessage {
   relationshipResult?: Record<string, unknown>;
 }
 
+export type UnifiedAgentStreamEvent =
+  | { type: "delta"; content: string }
+  | {
+      type: "metadata";
+      draft?: IntakeDraft;
+      relationshipResult?: Record<string, unknown>;
+    };
+
+function mergeToolCallDelta(
+  toolCalls: NonNullable<ChatMessage["tool_calls"]>,
+  delta: NonNullable<ChatCompletionStreamDelta["tool_calls"]>[number],
+) {
+  const index = delta.index;
+  const current = toolCalls[index] || {
+    id: "",
+    type: "function" as const,
+    function: { name: "", arguments: "" },
+  };
+
+  toolCalls[index] = {
+    id: delta.id || current.id,
+    type: delta.type || current.type,
+    function: {
+      name: delta.function?.name || current.function.name,
+      arguments:
+        current.function.arguments + (delta.function?.arguments || ""),
+    },
+  };
+}
+
 export async function runUnifiedAgent(
   userId: string,
   treeId: string,
@@ -380,4 +410,90 @@ export async function runUnifiedAgent(
   }
 
   return result;
+}
+
+export async function* runUnifiedAgentStream(
+  userId: string,
+  treeId: string,
+  userMessage: string,
+): AsyncGenerator<UnifiedAgentStreamEvent> {
+  const ctx: AgentContext = { userId, treeId };
+
+  const messages: ChatMessage[] = [
+    { role: "system", content: buildSystemPrompt() },
+    { role: "user", content: userMessage },
+  ];
+
+  const assistantToolCalls: NonNullable<ChatMessage["tool_calls"]> = [];
+  let directContent = "";
+
+  for await (const delta of createChatCompletionStream({
+    messages,
+    tools: TOOLS,
+  })) {
+    if (delta.content) {
+      directContent += delta.content;
+      yield { type: "delta", content: delta.content };
+    }
+
+    for (const toolCallDelta of delta.tool_calls || []) {
+      mergeToolCallDelta(assistantToolCalls, toolCallDelta);
+    }
+  }
+
+  if (assistantToolCalls.length === 0) {
+    if (!directContent) {
+      yield { type: "delta", content: "抱歉，我现在没法回答这个问题。" };
+    }
+    return;
+  }
+
+  const toolCall = assistantToolCalls[0];
+
+  messages.push({
+    role: "assistant",
+    content: "",
+    tool_calls: [toolCall],
+  });
+
+  const toolResult = await executeTool(
+    ctx,
+    toolCall.function.name,
+    JSON.parse(toolCall.function.arguments || "{}"),
+  );
+
+  messages.push({
+    role: "tool",
+    tool_call_id: toolCall.id,
+    content: toolResult,
+  });
+
+  let finalContent = "";
+  for await (const delta of createChatCompletionStream({
+    messages,
+    tools: TOOLS,
+    toolChoice: "none",
+  })) {
+    if (!delta.content) {
+      continue;
+    }
+
+    finalContent += delta.content;
+    yield { type: "delta", content: delta.content };
+  }
+
+  if (!finalContent) {
+    yield { type: "delta", content: "已完成处理，请查看结果。" };
+  }
+
+  try {
+    const parsed = JSON.parse(toolResult);
+    if (toolCall.function.name === "extract_family_data" && parsed.draft) {
+      yield { type: "metadata", draft: parsed.draft };
+    } else if (toolCall.function.name === "query_relationship") {
+      yield { type: "metadata", relationshipResult: parsed };
+    }
+  } catch {
+    // ignore parse errors
+  }
 }

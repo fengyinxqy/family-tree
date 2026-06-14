@@ -1,7 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import { runUnifiedAgent } from "@/lib/agent/unified-agent";
+import { runUnifiedAgentStream } from "@/lib/agent/unified-agent";
 import { getActiveFamilyTreeForUser } from "@/services/family-tree-space.service";
 
 const chatRequestSchema = z.object({
@@ -21,15 +21,10 @@ const chatRequestSchema = z.object({
  * { "message": "补充萧伟的生平、配偶和子女信息" }
  * ```
  *
- * 响应示例：
- * ```json
- * {
- *   "role": "assistant",
- *   "content": "已分析萧伟的资料缺口...",
- *   "draft": { ...IntakeDraft },
- *   "relationshipResult": null
- * }
- * ```
+ * 响应为 NDJSON 流：
+ * - delta：助手文本增量
+ * - metadata：草稿或关系结果，一次性返回
+ * - done：流结束
  */
 export async function POST(request: Request) {
   const session = await auth();
@@ -38,19 +33,48 @@ export async function POST(request: Request) {
   }
 
   try {
+    const userId = session.user.id;
+    const userName = session.user.name;
     const body = chatRequestSchema.parse(await request.json());
     const activeTree = await getActiveFamilyTreeForUser(
-      session.user.id,
-      session.user.name,
+      userId,
+      userName,
     );
 
-    const result = await runUnifiedAgent(
-      session.user.id,
-      activeTree.id,
-      body.message,
-    );
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = (event: Record<string, unknown>) => {
+          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+        };
 
-    return NextResponse.json(result);
+        try {
+          for await (const event of runUnifiedAgentStream(
+            userId,
+            activeTree.id,
+            body.message,
+          )) {
+            send(event);
+          }
+
+          send({ type: "done" });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Unified agent failed.";
+          send({ type: "error", error: message });
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "application/x-ndjson; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unified agent failed.";

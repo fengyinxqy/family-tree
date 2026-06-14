@@ -73,6 +73,98 @@
 
 这样的设计更适合真实业务，也更适合拿来展示你的产品思维和工程判断。
 
+## 技术架构图
+
+```mermaid
+flowchart TD
+  User["用户 / 家谱整理者"]
+
+  subgraph Frontend["前端工作台"]
+    UI["Next.js 16 + React 19"]
+    Tree["家谱树 / 世系表 / 人物档案"]
+    AgentPanel["AI 助手面板"]
+  end
+
+  subgraph Backend["应用后端"]
+    Routes["App Router API Routes"]
+    Auth["NextAuth.js v5"]
+    Services["业务服务层"]
+  end
+
+  subgraph AI["AI 能力层"]
+    Provider["OpenAI / DeepSeek"]
+    Structured["Zod + JSON Schema 结构化输出"]
+    Agent["Intake Agent / Relationship Agent"]
+  end
+
+  subgraph Domain["确定性业务逻辑"]
+    Draft["Draft 草稿模型"]
+    RuleEngine["Relationship Engine 亲属关系推理"]
+    ImportExport["导入导出"]
+  end
+
+  subgraph Data["数据层"]
+    Prisma["Prisma 7"]
+    Postgres["PostgreSQL"]
+  end
+
+  User --> UI
+  UI --> Tree
+  UI --> AgentPanel
+  UI --> Routes
+  Routes --> Auth
+  Routes --> Services
+  Services --> Prisma
+  Prisma --> Postgres
+  Routes --> Agent
+  Agent --> Provider
+  Agent --> Structured
+  Structured --> Draft
+  Services --> Draft
+  Services --> RuleEngine
+  Services --> ImportExport
+  RuleEngine --> Prisma
+```
+
+## AI 工作流图
+
+```mermaid
+flowchart TD
+  Input["用户输入自然语言家谱信息"]
+  Context["读取当前家谱上下文<br/>已有人物 / 已有关系"]
+  LLM["LLM 结构化抽取"]
+  Schema["Zod / JSON Schema 校验"]
+  Draft["生成 IntakeDraft<br/>人物 / 关系 / 证据 / 歧义"]
+  Ambiguity{"是否存在歧义或缺失信息？"}
+  Clarify["生成追问<br/>等待用户补充"]
+  Merge["合并补充信息<br/>mergeDraftWithClarification"]
+  Confirm["用户确认草稿"]
+  Apply["事务写入数据库<br/>applyIntakeDraft"]
+  Sync["同步代际信息<br/>syncGenerationNumbersForComponent"]
+  Query["关系问答"]
+  NER["AI 提取 sourceName / targetName"]
+  Match["匹配人物"]
+  Engine["BFS + hop pattern<br/>确定性亲属关系推理"]
+  Answer["返回关系称谓、路径与解释"]
+
+  Input --> Context
+  Context --> LLM
+  LLM --> Schema
+  Schema --> Draft
+  Draft --> Ambiguity
+  Ambiguity -- "是" --> Clarify
+  Clarify --> Merge
+  Merge --> Draft
+  Ambiguity -- "否" --> Confirm
+  Confirm --> Apply
+  Apply --> Sync
+
+  Query --> NER
+  NER --> Match
+  Match --> Engine
+  Engine --> Answer
+```
+
 ## 技术栈
 
 ### 前端
@@ -185,14 +277,6 @@ target.png       项目目标效果图
 - **AI 产品原型**
 - **垂直场景智能应用**
 - **可持续迭代的 MVP 开源项目**
-
-## 适合作为 GitHub 展示项目吗？
-
-可以，而且我认为它的展示价值比普通 Demo 更高。
-如果你准备把它放到 GitHub，建议把它定义为：
-> A Chinese-first AI-powered family genealogy workspace for family tree editing, archival maintenance, and kinship reasoning.
-
-这会让访问者更容易理解它不是"一个家谱页面"，而是"一个带 AI 的家谱产品工作台"。
 
 ## 后续可以继续增强的方向
 - OCR / 图片识别接入

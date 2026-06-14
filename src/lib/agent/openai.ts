@@ -184,12 +184,25 @@ export interface ChatCompletionResult {
   finishReason: string;
 }
 
+export interface ChatCompletionStreamDelta {
+  content?: string;
+  tool_calls?: Array<{
+    index: number;
+    id?: string;
+    type?: "function";
+    function?: {
+      name?: string;
+      arguments?: string;
+    };
+  }>;
+}
+
 export async function createChatCompletion(params: {
   messages: ChatMessage[];
   tools?: ChatTool[];
   toolChoice?: "auto" | "none";
 }): Promise<ChatCompletionResult> {
-  const { provider, apiKey, apiUrl } = getProviderConfig();
+  const { apiKey, apiUrl } = getProviderConfig();
   const model = getAgentModel();
 
   const requestBody: Record<string, unknown> = {
@@ -245,4 +258,86 @@ export async function createChatCompletion(params: {
     },
     finishReason: choice.finish_reason || "stop",
   };
+}
+
+export async function* createChatCompletionStream(params: {
+  messages: ChatMessage[];
+  tools?: ChatTool[];
+  toolChoice?: "auto" | "none";
+}): AsyncGenerator<ChatCompletionStreamDelta> {
+  const { apiKey, apiUrl } = getProviderConfig();
+  const model = getAgentModel();
+
+  const requestBody: Record<string, unknown> = {
+    model,
+    temperature: 0.3,
+    messages: params.messages,
+    stream: true,
+  };
+
+  if (params.tools && params.tools.length > 0) {
+    requestBody.tools = params.tools;
+    requestBody.tool_choice = params.toolChoice || "auto";
+  }
+
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || "AI provider request failed.");
+  }
+
+  if (!response.body) {
+    throw new Error("AI provider response did not include a stream body.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith(":")) {
+        continue;
+      }
+
+      const data = line.startsWith("data:") ? line.slice(5).trim() : line;
+      if (data === "[DONE]") {
+        return;
+      }
+
+      const json = JSON.parse(data) as {
+        choices?: Array<{
+          delta?: ChatCompletionStreamDelta;
+        }>;
+        error?: { message?: string };
+      };
+
+      if (json.error?.message) {
+        throw new Error(json.error.message);
+      }
+
+      const delta = json.choices?.[0]?.delta;
+      if (delta?.content || delta?.tool_calls) {
+        yield delta;
+      }
+    }
+  }
 }
