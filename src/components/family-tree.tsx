@@ -854,7 +854,7 @@ export default function FamilyTree({
           </div>
 
           <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
-            <aside className="hidden w-24 shrink-0 border-r border-border/60 px-3 py-6 lg:block">
+            <aside className="hidden w-28 shrink-0 border-r border-border/60 px-3 py-6 lg:block">
               <div className="app-panel flex h-full flex-col rounded-[1.8rem] border border-border/70 p-2">
                 <div className="flex justify-center pb-2">
                   <Button
