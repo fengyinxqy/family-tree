@@ -90,33 +90,38 @@ export function getGenerationGroups(
   const levels = new Map<string, number>();
   const queue: Array<[string, number]> = roots.map((rootId) => [rootId, 0]);
 
+  // 第一轮 BFS：仅沿子女关系分配世代
   while (queue.length > 0) {
     const [personId, level] = queue.shift()!;
-    const existing = levels.get(personId);
-    // 单调检查：已有更优层级则跳过
-    if (existing !== undefined && existing >= level) continue;
+    if (levels.has(personId)) continue;
     levels.set(personId, level);
 
-    // 子女：level + 1
     for (const childId of childrenMap.get(personId) ?? []) {
-      const childExisting = levels.get(childId);
-      if (childExisting === undefined || childExisting < level + 1) {
+      if (!levels.has(childId)) {
         queue.push([childId, level + 1]);
-      }
-    }
-
-    // 配偶：同 level（同代人）
-    for (const spouseId of spouseMap.get(personId) ?? []) {
-      const spouseExisting = levels.get(spouseId);
-      if (spouseExisting === undefined || spouseExisting < level) {
-        queue.push([spouseId, level]);
       }
     }
   }
 
+  // 未通过子女链到达的人（无父母记录的配偶等）暂置 level 0
   for (const person of persons) {
     if (!levels.has(person.id)) {
       levels.set(person.id, 0);
+    }
+  }
+
+  // 第二轮：配偶代际稳定化 — 配偶应属同代
+  const spouseEdges = relationships.filter((r) => r.type === "spouse");
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const rel of spouseEdges) {
+      const a = levels.get(rel.personAId);
+      const b = levels.get(rel.personBId);
+      if (a === undefined || b === undefined || a === b) continue;
+      const target = Math.max(a, b);
+      if (a !== target) { levels.set(rel.personAId, target); changed = true; }
+      if (b !== target) { levels.set(rel.personBId, target); changed = true; }
     }
   }
 
