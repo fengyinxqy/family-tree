@@ -89,7 +89,7 @@ function PersonNodeComponent({ data, selected }: NodeProps) {
 
       <div
         className={cn(
-          "app-frosted relative flex w-[190px] items-start gap-3 overflow-hidden rounded-[1.35rem] border px-3.5 py-3 text-left shadow-[0_14px_32px_color-mix(in_oklch,var(--foreground)_10%,transparent)] transition-all duration-200",
+          "app-frosted relative flex w-[200px] items-start gap-3 overflow-hidden rounded-[1.35rem] border px-3.5 py-3 text-left shadow-[0_14px_32px_color-mix(in_oklch,var(--foreground)_10%,transparent)] transition-all duration-200",
           "bg-gradient-to-br",
           palette.frame,
           palette.border,
@@ -108,14 +108,14 @@ function PersonNodeComponent({ data, selected }: NodeProps) {
           <p className="truncate font-heading text-[1.02rem] font-semibold tracking-tight text-foreground">
             {person.name}
           </p>
-          <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="rounded-full border border-border/80 bg-background/65 px-2 py-0.5">
+          <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+            <span className="inline-block rounded-full border border-border/80 bg-background/65 px-2 py-0.5">
               {isMale ? "男" : "女"}
             </span>
-            <span className="truncate">
+            <div>
               {birthYear}
               {deathYear ? ` - ${deathYear}` : ""}
-            </span>
+            </div>
           </div>
         </div>
 
