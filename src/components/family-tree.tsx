@@ -917,7 +917,7 @@ export default function FamilyTree({
               </div>
             </aside>
 
-            <div className="min-w-0 flex-1 px-4 py-4 sm:px-6 flex flex-col">
+            <div className="min-w-0 flex-1 px-4 py-4 sm:px-6">
               <div className="mb-4 flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{persons.length} 位成员</Badge>
                 <Badge variant="outline">{relationships.length} 条关系</Badge>
@@ -926,8 +926,8 @@ export default function FamilyTree({
                   固定右侧助手
                 </Badge>
               </div>
-              <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2rem] border border-border/70 bg-card/36">
-                <div className={cn("flex-1 min-h-0", view === "table" || view === "timeline" ? "overflow-auto p-4" : "")}>
+              <div className="relative min-h-0 overflow-hidden rounded-[2rem] border border-border/70 bg-card/36">
+                <div className={cn("min-h-[62vh] h-[62vh] lg:h-[calc(100vh-17rem)]", view === "table" || view === "timeline" ? "overflow-auto p-4" : "")}>
                   {renderMainView()}
                 </div>
               </div>
