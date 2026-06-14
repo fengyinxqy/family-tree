@@ -34,7 +34,6 @@ export default async function TreePage({
 
   return (
     <FamilyTree
-      key={`${viewParam ?? "tree"}:${readParam(query.personId) ?? "none"}:${readParam(query.generation) ?? "none"}:${panelParam ?? "assistant"}`}
       persons={persons}
       relationships={relationships}
       initialState={{

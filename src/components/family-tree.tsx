@@ -92,9 +92,9 @@ function WorkspaceCanvas({
 }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [shouldFit, setShouldFit] = useState(true);
   const { setCenter, fitView } = useReactFlow();
   const focusRequestRef = useRef<"selected" | "generation" | null>("selected");
+  const hasInitialFitRef = useRef(false);
 
   useEffect(() => {
     const layout = layoutVertical(persons, relationships) as { nodes: TreeNode[]; edges: TreeEdge[] };
@@ -151,12 +151,11 @@ function WorkspaceCanvas({
   }, [highlightedGenerationIds, selectedPersonId]);
 
   useEffect(() => {
-    if (nodes.length > 0 && shouldFit) {
-      fitView({ padding: 0.24, duration: 400 });
-      const timer = setTimeout(() => setShouldFit(false), 120);
-      return () => clearTimeout(timer);
+    if (nodes.length > 0 && !hasInitialFitRef.current) {
+      fitView({ padding: 0.24 });
+      hasInitialFitRef.current = true;
     }
-  }, [fitView, nodes.length, shouldFit]);
+  }, [fitView, nodes.length]);
 
   useEffect(() => {
     if (focusRequestRef.current === "selected" && selectedPersonId) {
@@ -194,7 +193,7 @@ function WorkspaceCanvas({
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       nodeTypes={{ person: PersonNode }}
-      fitView={shouldFit || nodes.length === 0}
+      fitView={false}
       fitViewOptions={{ padding: 0.28 }}
       minZoom={0.12}
       maxZoom={2}
@@ -203,7 +202,11 @@ function WorkspaceCanvas({
       nodesDraggable
       nodesConnectable={false}
       elementsSelectable
-      onNodeClick={(_event, node) => onSelectPerson(node.id)}
+      onNodeClick={(_event, node) => {
+        hasInitialFitRef.current = true;
+        focusRequestRef.current = "selected";
+        onSelectPerson(node.id);
+      }}
       onNodeDragStop={async (_event, node) => {
         await fetch(`/api/persons/${node.id}/position`, {
           method: "PATCH",
