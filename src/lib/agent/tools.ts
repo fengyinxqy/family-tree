@@ -2,15 +2,16 @@ import { prisma } from "@/lib/prisma";
 import type { IntakeDraft, IntakeExtraction, ExistingPersonContext } from "./types";
 import { intakeDraftSchema } from "./schemas";
 
-export async function getUserGenealogyContext(userId: string) {
+export async function getUserGenealogyContext(userId: string, treeId: string) {
   const [persons, relationships] = await Promise.all([
     prisma.person.findMany({
-      where: { createdBy: userId },
+      where: { createdBy: userId, treeId },
       orderBy: { createdAt: "asc" },
     }),
     prisma.relationship.findMany({
       where: {
-        personA: { createdBy: userId },
+        personA: { createdBy: userId, treeId },
+        personB: { createdBy: userId, treeId },
       },
       orderBy: { createdAt: "asc" },
     }),
@@ -594,7 +595,7 @@ export function mergeDraftWithClarification(
   return intakeDraftSchema.parse(mergedDraft);
 }
 
-export async function applyIntakeDraft(userId: string, draftInput: IntakeDraft) {
+export async function applyIntakeDraft(userId: string, treeId: string, draftInput: IntakeDraft) {
   const draft = intakeDraftSchema.parse(draftInput);
   const refToPersonId = new Map<string, string>();
 
@@ -605,7 +606,7 @@ export async function applyIntakeDraft(userId: string, draftInput: IntakeDraft) 
           where: { id: person.existingPersonId },
         });
 
-        if (!existingPerson || existingPerson.createdBy !== userId) {
+        if (!existingPerson || existingPerson.createdBy !== userId || existingPerson.treeId !== treeId) {
           throw new Error(`Person ${person.name} cannot be reused by this user.`);
         }
 
@@ -625,6 +626,7 @@ export async function applyIntakeDraft(userId: string, draftInput: IntakeDraft) 
           deathDate: person.deathDate,
           bio: person.bio,
           createdBy: userId,
+          treeId,
         },
       });
 

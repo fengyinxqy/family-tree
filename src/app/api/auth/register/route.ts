@@ -41,7 +41,17 @@ export async function POST(request: Request) {
     const passwordHash = await hash(password, 10);
 
     const user = await prisma.user.create({
-      data: { name, email, passwordHash },
+      data: {
+        name,
+        email,
+        passwordHash,
+        familyTrees: {
+          create: {
+            name: `${name}家谱`,
+            description: "默认家谱空间",
+          },
+        },
+      },
       select: { id: true, email: true, name: true },
     });
 

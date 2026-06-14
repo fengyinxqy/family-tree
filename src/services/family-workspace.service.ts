@@ -1,9 +1,11 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import { getActiveFamilyTreeForUser, type ActiveFamilyTreeSpace } from "@/services/family-tree-space.service";
 import type { RelationshipData, WorkspacePersonData } from "@/types";
 
 export interface FamilyWorkspaceData {
+  activeTree: ActiveFamilyTreeSpace;
   persons: WorkspacePersonData[];
   relationships: RelationshipData[];
 }
@@ -14,9 +16,10 @@ export async function getFamilyWorkspaceData(): Promise<FamilyWorkspaceData> {
     redirect("/login");
   }
 
+  const activeTree = await getActiveFamilyTreeForUser(session.user.id, session.user.name);
   const [persons, relationships] = await Promise.all([
     prisma.person.findMany({
-      where: { createdBy: session.user.id },
+      where: { createdBy: session.user.id, treeId: activeTree.id },
       include: {
         events: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
       },
@@ -24,13 +27,15 @@ export async function getFamilyWorkspaceData(): Promise<FamilyWorkspaceData> {
     }),
     prisma.relationship.findMany({
       where: {
-        personA: { createdBy: session.user.id },
+        personA: { createdBy: session.user.id, treeId: activeTree.id },
+        personB: { createdBy: session.user.id, treeId: activeTree.id },
       },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     }),
   ]);
 
   return {
+    activeTree,
     persons: persons.map((person) => ({
       id: person.id,
       name: person.name,
@@ -46,6 +51,7 @@ export async function getFamilyWorkspaceData(): Promise<FamilyWorkspaceData> {
       posX: person.posX,
       posY: person.posY,
       createdAt: person.createdAt.toISOString(),
+      treeId: person.treeId,
       events: person.events.map((event) => ({
         id: event.id,
         personId: event.personId,

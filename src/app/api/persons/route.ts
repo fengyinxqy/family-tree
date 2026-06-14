@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { createPerson } from "@/services/person.service";
+import { createPerson, getPersons } from "@/services/person.service";
 
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
-  const { prisma } = await import("@/lib/prisma");
-  const persons = await prisma.person.findMany({
-    where: { createdBy: session.user.id },
-    orderBy: { createdAt: "asc" },
-  });
+  const persons = await getPersons();
 
   return NextResponse.json(persons);
 }

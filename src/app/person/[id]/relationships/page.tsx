@@ -54,6 +54,7 @@ export default function RelationshipsPage() {
           posX: data.posX ?? null,
           posY: data.posY ?? null,
           createdAt: data.createdAt,
+          treeId: data.treeId,
         });
         setLoading(false);
       } catch {

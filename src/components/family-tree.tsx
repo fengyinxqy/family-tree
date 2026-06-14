@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   Background,
   Controls,
@@ -16,18 +16,23 @@ import {
 import "@xyflow/react/dist/style.css";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
+  AlertTriangle,
   Bot,
   ChevronDown,
   ChevronUp,
   Clock3,
+  FolderTree,
   GitBranch,
+  Loader2,
   MapPinned,
   PanelRightClose,
   PanelRightOpen,
   Plus,
   ScrollText,
   Sparkles,
+  Trash2,
   Trees,
 } from "lucide-react";
 import { AgentPanel } from "@/components/agent-panel";
@@ -37,12 +42,21 @@ import { PersonNode } from "@/components/person-node";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   buildFamilyMaps,
@@ -54,12 +68,17 @@ import {
 } from "@/lib/family-graph";
 import { layoutVertical } from "@/lib/tree-layout";
 import { cn } from "@/lib/utils";
+import { createFamilyTreeSpace, deleteFamilyTreeSpace, switchFamilyTreeSpace } from "@/services/family-tree-space.service";
+import type { ActiveFamilyTreeSpace, FamilyTreeSpaceSummary } from "@/services/family-tree-space.service";
 import type { RelationshipData, TreeEdge, TreeNode, WorkspacePersonData } from "@/types";
+
 
 type WorkspaceView = "tree" | "table" | "timeline" | "branch";
 type PanelState = "assistant" | "collapsed";
 
 interface FamilyTreeProps {
+  activeTree: ActiveFamilyTreeSpace;
+  familyTrees: FamilyTreeSpaceSummary[];
   persons: WorkspacePersonData[];
   relationships: RelationshipData[];
   initialState: {
@@ -70,6 +89,183 @@ interface FamilyTreeProps {
   };
 }
 
+function TreeSpaceSwitcher({
+  activeTree,
+  familyTrees,
+}: {
+  activeTree: ActiveFamilyTreeSpace;
+  familyTrees: FamilyTreeSpaceSummary[];
+}) {
+  const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
+  const [isPending, startTransition] = useTransition();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<FamilyTreeSpaceSummary | null>(null);
+
+  function handleSwitch(treeId: string) {
+    if (treeId === activeTree.id || isPending) return;
+    startTransition(async () => {
+      await switchFamilyTreeSpace(treeId);
+      router.refresh();
+    });
+  }
+
+  function handleDelete() {
+    if (!deleteTarget || isPending) return;
+    startTransition(async () => {
+      try {
+        await deleteFamilyTreeSpace(deleteTarget.id);
+        toast.success(`已删除"${deleteTarget.name}"`);
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "删除失败");
+      } finally {
+        setDeleteTarget(null);
+      }
+    });
+  }
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-2xl border border-border/70 bg-card/72 px-4 py-2.5">
+      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <FolderTree className="size-4" />
+        当前家谱空间
+      </div>
+      <span className="text-sm font-semibold text-foreground">{activeTree.name}</span>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {familyTrees.map((tree) => (
+          <div key={tree.id} className="group relative inline-flex items-center">
+            <Button
+              type="button"
+              size="sm"
+              variant={tree.id === activeTree.id ? "default" : "outline"}
+              disabled={isPending}
+              onClick={() => handleSwitch(tree.id)}
+              className={tree.id === activeTree.id ? "" : "pr-1"}
+            >
+              {tree.name}
+              <span className="text-xs opacity-75">{tree.personCount} 人</span>
+            </Button>
+            {tree.id !== activeTree.id && familyTrees.length > 1 && (
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                disabled={isPending}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDeleteTarget(tree);
+                }}
+                className="ml-0.5 size-6 rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+              >
+                <Trash2 className="size-3" />
+              </Button>
+            )}
+          </div>
+        ))}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => setDialogOpen(true)}
+        >
+          <Plus data-icon="inline-start" />
+          新建空间
+        </Button>
+      </div>
+
+      {isPending ? <Loader2 className="size-4 animate-spin text-muted-foreground" /> : null}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>新建家谱空间</DialogTitle>
+            <DialogDescription>
+              创建新的家谱空间来管理不同分支的家谱数据
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            ref={formRef}
+            className="flex flex-col gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              startTransition(async () => {
+                await createFamilyTreeSpace(formData);
+                formRef.current?.reset();
+                setDialogOpen(false);
+                router.refresh();
+              });
+            }}
+          >
+            <Input name="name" placeholder="新家谱名称" maxLength={40} required />
+            <Input name="description" placeholder="备注（可选）" maxLength={120} />
+            <DialogFooter>
+              <Button type="submit" disabled={isPending}>
+                {isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Plus data-icon="inline-start" />
+                )}
+                创建
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-destructive/10 ring-1 ring-destructive/20">
+                <AlertTriangle className="h-4.5 w-4.5 text-destructive" strokeWidth={1.8} />
+              </div>
+              <div>
+                <DialogTitle className="text-lg">确认删除</DialogTitle>
+                <DialogDescription className="text-xs mt-0.5">
+                  此操作无法撤销
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <p className="text-sm text-muted-foreground">
+            确定要删除<span className="font-medium text-foreground">"{deleteTarget?.name}"</span>吗？该空间内的所有成员和关系数据将被一并删除。
+          </p>
+
+          <DialogFooter>
+            <div className="flex gap-3 w-full">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setDeleteTarget(null)}
+                disabled={isPending}
+              >
+                取消
+              </Button>
+              <Button
+                onClick={handleDelete}
+                disabled={isPending}
+                className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    删除中...
+                  </>
+                ) : (
+                  "确认删除"
+                )}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
 function minimapNodeColor(node: Node): string {
   const data = node.data as unknown as WorkspacePersonData | undefined;
   if (!data) return "oklch(0.7 0.05 70)";
@@ -370,6 +566,8 @@ function TimelineView({
 }
 
 export default function FamilyTree({
+  activeTree,
+  familyTrees,
   persons,
   relationships,
   initialState,
@@ -381,6 +579,10 @@ export default function FamilyTree({
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(initialState.personId);
   const [activeGeneration, setActiveGeneration] = useState<string | null>(initialState.generation);
   const [panel, setPanel] = useState<PanelState>(initialState.panel);
+  const [headerCollapsed, setHeaderCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("family.workspace.headerCollapsed") === "true";
+  });
 
   const generationGroups = useMemo(() => getGenerationGroups(persons, relationships), [persons, relationships]);
   const rootIds = useMemo(() => getRootPersonIds(persons, relationships), [persons, relationships]);
@@ -520,14 +722,51 @@ export default function FamilyTree({
         </div>
 
         <div className="relative z-10 flex h-full flex-col">
-          <div className="border-b border-border/60 px-6 pt-6 pb-4">
+          <div className={cn(
+            "border-b border-border/60 transition-all duration-300",
+            headerCollapsed ? "px-6 py-2" : "px-6 pt-6 pb-4"
+          )}>
+            {/* Collapsed bar — always visible */}
+            <div className={cn(
+              "flex items-center justify-between gap-4",
+              !headerCollapsed && "hidden"
+            )}>
+              <div className="flex items-center gap-4 min-w-0">
+                <h1 className="font-heading text-xl font-semibold tracking-tight text-foreground truncate">
+                  {activeTree.name || familyName}
+                </h1>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">{persons.length} 人</Badge>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setHeaderCollapsed(false);
+                    window.localStorage.setItem("family.workspace.headerCollapsed", "false");
+                  }}
+                >
+                  <ChevronDown className="size-4" />
+                  展开
+                </Button>
+              </div>
+            </div>
+
+            {/* Expandable content — animated height */}
+            <div className={cn(
+              "grid transition-[grid-template-rows] duration-300 ease-out",
+              headerCollapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
+            )}>
+              <div className="overflow-hidden">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
               <div>
                 <div className="flex items-center gap-3">
                   <h1 className="font-heading text-4xl font-semibold tracking-tight text-foreground">
-                    {familyName}
+                    {activeTree.name || familyName}
                   </h1>
-                  <Badge variant="outline">公开</Badge>
+                  <Badge variant="outline">私有空间</Badge>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
                   始祖：{ancestorName} · 现有成员：{persons.length} 人
@@ -542,6 +781,8 @@ export default function FamilyTree({
                 </Button>
               </div>
             </div>
+
+            <TreeSpaceSwitcher activeTree={activeTree} familyTrees={familyTrees} />
 
             <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <Tabs value={view} onValueChange={(value) => applyWorkspaceState({ nextView: value as WorkspaceView })}>
@@ -592,6 +833,22 @@ export default function FamilyTree({
                     返回全树
                   </Button>
                 ) : null}
+              </div>
+            </div>
+
+            <div className="mt-3 flex justify-center">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setHeaderCollapsed(true);
+                  window.localStorage.setItem("family.workspace.headerCollapsed", "true");
+                }}
+              >
+                <ChevronUp className="size-4" />
+                收起
+              </Button>
+            </div>
               </div>
             </div>
           </div>

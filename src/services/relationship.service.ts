@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getActiveFamilyTreeForUser } from "@/services/family-tree-space.service";
 
 export interface CreateRelationshipInput {
   type: "spouse" | "child";
@@ -12,13 +13,20 @@ export interface CreateRelationshipInput {
   label?: string | null;
 }
 
-async function getOwnedPersons(personAId: string, personBId: string, userId: string) {
+async function getOwnedPersons(personAId: string, personBId: string, userId: string, treeId: string) {
   const [personA, personB] = await Promise.all([
     prisma.person.findUnique({ where: { id: personAId } }),
     prisma.person.findUnique({ where: { id: personBId } }),
   ]);
 
-  if (!personA || !personB || personA.createdBy !== userId || personB.createdBy !== userId) {
+  if (
+    !personA ||
+    !personB ||
+    personA.createdBy !== userId ||
+    personB.createdBy !== userId ||
+    personA.treeId !== treeId ||
+    personB.treeId !== treeId
+  ) {
     throw new Error("无权操作");
   }
 
@@ -30,17 +38,19 @@ type GenerationSyncClient = Pick<typeof prisma, "person" | "relationship">;
 async function syncGenerationNumbersForComponent(
   tx: GenerationSyncClient,
   userId: string,
+  treeId: string,
   seedPersonId: string,
   seedGenerationNumber: number,
 ) {
   const [persons, relationships] = await Promise.all([
     tx.person.findMany({
-      where: { createdBy: userId },
+      where: { createdBy: userId, treeId },
       select: { id: true, generationNumber: true },
     }),
     tx.relationship.findMany({
       where: {
-        personA: { createdBy: userId },
+        personA: { createdBy: userId, treeId },
+        personB: { createdBy: userId, treeId },
       },
       select: {
         type: true,
@@ -133,7 +143,8 @@ export async function createRelationship(input: CreateRelationshipInput) {
     throw new Error("未登录");
   }
 
-  const { personA } = await getOwnedPersons(input.personAId, input.personBId, userId);
+  const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+  const { personA } = await getOwnedPersons(input.personAId, input.personBId, userId, activeTree.id);
 
   const duplicateWhere =
     input.type === "spouse"
@@ -169,6 +180,7 @@ export async function createRelationship(input: CreateRelationshipInput) {
     await syncGenerationNumbersForComponent(
       tx,
       userId,
+      activeTree.id,
       input.personAId,
       personA.generationNumber,
     );
@@ -197,7 +209,8 @@ export async function deleteRelationship(id: string) {
   if (
     !relationship ||
     relationship.personA.createdBy !== session.user.id ||
-    relationship.personB.createdBy !== session.user.id
+    relationship.personB.createdBy !== session.user.id ||
+    relationship.personA.treeId !== relationship.personB.treeId
   ) {
     throw new Error("无权操作");
   }

@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { deriveSiblingRelations, type DerivedSiblingRelation } from "@/lib/relationships/derived-siblings";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getActiveFamilyTreeForUser } from "@/services/family-tree-space.service";
 import type { PersonEventData } from "@/types";
 
 export interface PersonEventInput {
@@ -62,6 +63,7 @@ export interface PersonDetailResult {
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
+  treeId: string;
   events: PersonEventData[];
   siblings: PersonSiblingData[];
   relationsA: Array<{
@@ -113,8 +115,9 @@ export async function getPersons() {
     throw new Error("未登录");
   }
 
+  const activeTree = await getActiveFamilyTreeForUser(session.user.id, session.user.name);
   return prisma.person.findMany({
-    where: { createdBy: session.user.id },
+    where: { createdBy: session.user.id, treeId: activeTree.id },
     orderBy: { createdAt: "asc" },
   });
 }
@@ -215,6 +218,7 @@ export async function createPerson(input: CreatePersonInput) {
   }
 
   const userId = session.user.id;
+  const activeTree = await getActiveFamilyTreeForUser(userId, session.user.name);
 
   if (input.events) {
     validateEvents(input.events);
@@ -234,6 +238,7 @@ export async function createPerson(input: CreatePersonInput) {
         nativePlace: input.nativePlace ?? null,
         notes: input.notes ?? null,
         createdBy: userId,
+        treeId: activeTree.id,
       },
     });
 

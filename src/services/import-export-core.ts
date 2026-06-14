@@ -49,7 +49,7 @@ type PersonEventRecord = {
 
 type TransactionClient = {
   relationship: {
-    deleteMany(args: { where: { personA: { createdBy: string } } }): Promise<unknown>;
+    deleteMany(args: { where: { personA: { createdBy: string; treeId: string } } }): Promise<unknown>;
     createMany(args: {
       data: Array<{
         type: "spouse" | "child";
@@ -62,7 +62,7 @@ type TransactionClient = {
     }): Promise<unknown>;
   };
   personEvent: {
-    deleteMany(args: { where: { person: { createdBy: string } } }): Promise<unknown>;
+    deleteMany(args: { where: { person: { createdBy: string; treeId: string } } }): Promise<unknown>;
     createMany(args: {
       data: Array<{
         personId: string;
@@ -77,7 +77,7 @@ type TransactionClient = {
     }): Promise<unknown>;
   };
   person: {
-    deleteMany(args: { where: { createdBy: string } }): Promise<unknown>;
+    deleteMany(args: { where: { createdBy: string; treeId: string } }): Promise<unknown>;
     create(args: {
       data: {
         name: string;
@@ -94,6 +94,7 @@ type TransactionClient = {
         posY: number | null;
         createdAt: Date;
         createdBy: string;
+        treeId: string;
       };
     }): Promise<{ id: string }>;
   };
@@ -102,19 +103,19 @@ type TransactionClient = {
 type PrismaLike = {
   person: {
     findMany(args: {
-      where: { createdBy: string };
+      where: { createdBy: string; treeId: string };
       orderBy: Array<{ createdAt: "asc" } | { id: "asc" }>;
     }): Promise<PersonRecord[]>;
   };
   relationship: {
     findMany(args: {
-      where: { personA: { createdBy: string } };
+      where: { personA: { createdBy: string; treeId: string } };
       orderBy: Array<{ sortOrder: "asc" } | { createdAt: "asc" } | { id: "asc" }>;
     }): Promise<RelationshipRecord[]>;
   };
   personEvent: {
     findMany(args: {
-      where: { person: { createdBy: string } };
+      where: { person: { createdBy: string; treeId: string } };
       orderBy: Array<
         { personId: "asc" } | { sortOrder: "asc" } | { createdAt: "asc" } | { id: "asc" }
       >;
@@ -127,18 +128,18 @@ export function createImportExportService(deps: {
   prisma: PrismaLike;
   revalidatePath: (path: string) => void;
 }) {
-  async function exportFamilyBackupForUser(userId: string): Promise<FamilyBackupDocument> {
+  async function exportFamilyBackupForUser(userId: string, treeId: string): Promise<FamilyBackupDocument> {
     const [persons, relationships, events] = await Promise.all([
       deps.prisma.person.findMany({
-        where: { createdBy: userId },
+        where: { createdBy: userId, treeId },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       }),
       deps.prisma.relationship.findMany({
-        where: { personA: { createdBy: userId } },
+        where: { personA: { createdBy: userId, treeId } },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       }),
       deps.prisma.personEvent.findMany({
-        where: { person: { createdBy: userId } },
+        where: { person: { createdBy: userId, treeId } },
         orderBy: [{ personId: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       }),
     ]);
@@ -183,18 +184,18 @@ export function createImportExportService(deps: {
     });
   }
 
-  async function importFamilyBackupForUser(userId: string, input: unknown) {
+  async function importFamilyBackupForUser(userId: string, treeId: string, input: unknown) {
     const document = validateFamilyBackupDocument(input);
 
     const summary = await deps.prisma.$transaction(async (tx) => {
       await tx.relationship.deleteMany({
-        where: { personA: { createdBy: userId } },
+        where: { personA: { createdBy: userId, treeId } },
       });
       await tx.personEvent.deleteMany({
-        where: { person: { createdBy: userId } },
+        where: { person: { createdBy: userId, treeId } },
       });
       await tx.person.deleteMany({
-        where: { createdBy: userId },
+        where: { createdBy: userId, treeId },
       });
 
       const personIdMap = new Map<string, string>();
@@ -216,6 +217,7 @@ export function createImportExportService(deps: {
             posY: person.posY,
             createdAt: new Date(person.createdAt),
             createdBy: userId,
+            treeId,
           },
         });
 

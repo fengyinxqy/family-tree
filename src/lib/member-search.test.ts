@@ -25,6 +25,7 @@ const persons: PersonData[] = [
     posX: null,
     posY: null,
     createdAt: "2026-06-01T00:00:00.000Z",
+    treeId: "tree-1",
   },
   {
     id: "2",
@@ -41,6 +42,7 @@ const persons: PersonData[] = [
     posX: null,
     posY: null,
     createdAt: "2026-06-01T00:00:00.000Z",
+    treeId: "tree-1",
   },
   {
     id: "3",
@@ -57,6 +59,7 @@ const persons: PersonData[] = [
     posX: null,
     posY: null,
     createdAt: "2026-06-01T00:00:00.000Z",
+    treeId: "tree-1",
   },
 ];
 

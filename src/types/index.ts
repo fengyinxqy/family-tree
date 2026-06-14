@@ -13,6 +13,7 @@ export interface PersonData {
   posX: number | null;
   posY: number | null;
   createdAt: string;
+  treeId: string;
 }
 
 export interface PersonEventData {

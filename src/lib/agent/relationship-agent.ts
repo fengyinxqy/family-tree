@@ -18,8 +18,8 @@ function buildPeopleRoster(
     .join("\n");
 }
 
-export async function runRelationshipAgent(userId: string, question: string) {
-  const { persons, relationships } = await getUserGenealogyContext(userId);
+export async function runRelationshipAgent(userId: string, treeId: string, question: string) {
+  const { persons, relationships } = await getUserGenealogyContext(userId, treeId);
   const existingPeople = toExistingPersonContext(persons);
 
   const extracted = await createStructuredCompletion({

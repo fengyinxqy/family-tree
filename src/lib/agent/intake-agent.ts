@@ -26,8 +26,8 @@ function buildExistingPeoplePrompt(
     .join("\n");
 }
 
-export async function runIntakeAgent(userId: string, text: string) {
-  const { persons, relationships } = await getUserGenealogyContext(userId);
+export async function runIntakeAgent(userId: string, treeId: string, text: string) {
+  const { persons, relationships } = await getUserGenealogyContext(userId, treeId);
   const existingPeople = toExistingPersonContext(persons);
 
   const extraction = await createStructuredCompletion({
@@ -121,11 +121,12 @@ export function buildContinuationPrompt(
  */
 export async function runIntakeContinuation(
   userId: string,
+  treeId: string,
   text: string,
   previousDraft: IntakeDraft,
   clarificationText: string,
 ): Promise<IntakeDraft> {
-  const { persons, relationships } = await getUserGenealogyContext(userId);
+  const { persons, relationships } = await getUserGenealogyContext(userId, treeId);
   const existingPeople = toExistingPersonContext(persons);
 
   const extraction = await createStructuredCompletion({

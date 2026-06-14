@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { importFamilyBackupForUser } from "@/services/import-export.service";
+import { getActiveFamilyTreeForUser } from "@/services/family-tree-space.service";
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -9,7 +10,8 @@ export async function POST(request: Request) {
 
   try {
     const payload = await request.json();
-    const summary = await importFamilyBackupForUser(session.user.id, payload);
+    const activeTree = await getActiveFamilyTreeForUser(session.user.id, session.user.name);
+    const summary = await importFamilyBackupForUser(session.user.id, activeTree.id, payload);
 
     return Response.json({
       ok: true,

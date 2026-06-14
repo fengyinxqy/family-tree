@@ -13,8 +13,23 @@ model User {
   passwordHash String   @map("password_hash")
   createdAt    DateTime @default(now()) @map("created_at")
   persons      Person[]
+  familyTrees  FamilyTree[]
 
   @@map("users")
+}
+
+model FamilyTree {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  ownerId     String   @map("owner_id")
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  persons     Person[]
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([ownerId, createdAt], map: "idx_family_trees_owner_created")
+  @@map("family_trees")
 }
 
 model Person {
@@ -35,10 +50,13 @@ model Person {
   updatedAt       DateTime       @updatedAt @map("updated_at")
   createdBy       String         @map("created_by")
   creator         User           @relation(fields: [createdBy], references: [id])
+  treeId          String         @map("tree_id")
+  tree            FamilyTree     @relation(fields: [treeId], references: [id], onDelete: Cascade)
   relationsA      Relationship[] @relation("PersonA")
   relationsB      Relationship[] @relation("PersonB")
   events          PersonEvent[]
 
+  @@index([createdBy, treeId], map: "idx_persons_created_by_tree")
   @@map("persons")
 }
 

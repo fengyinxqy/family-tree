@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { runIntakeAgent, runIntakeContinuation } from "@/lib/agent/intake-agent";
 import { intakeRouteRequestSchema } from "@/lib/agent/schemas";
+import { getActiveFamilyTreeForUser } from "@/services/family-tree-space.service";
 
 /**
  * POST /api/agent/intake
@@ -42,11 +43,13 @@ export async function POST(request: Request) {
 
   try {
     const body = intakeRouteRequestSchema.parse(await request.json());
+    const activeTree = await getActiveFamilyTreeForUser(session.user.id, session.user.name);
 
     // 续写模式：同时存在 previousDraft 和 clarificationText 时，执行增量合并
     if (body.previousDraft && body.clarificationText) {
       const draft = await runIntakeContinuation(
         session.user.id,
+        activeTree.id,
         body.text,
         body.previousDraft,
         body.clarificationText,
@@ -55,7 +58,7 @@ export async function POST(request: Request) {
     }
 
     // 首次录入模式（向后兼容）
-    const draft = await runIntakeAgent(session.user.id, body.text);
+    const draft = await runIntakeAgent(session.user.id, activeTree.id, body.text);
     return NextResponse.json(draft);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Intake agent failed.";

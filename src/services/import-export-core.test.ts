@@ -20,6 +20,7 @@ type State = {
     posY: number | null;
     createdAt: Date;
     createdBy: string;
+    treeId: string;
   }>;
   relationships: Array<{
     id: string;
@@ -121,10 +122,12 @@ function createFakePrisma(initialState: State, options?: { failOnCreateMany?: bo
 
   const tx = {
     relationship: {
-      async deleteMany(args: { where: { personA: { createdBy: string } } }) {
-        const { createdBy } = args.where.personA;
+      async deleteMany(args: { where: { personA: { createdBy: string; treeId: string } } }) {
+        const { createdBy, treeId } = args.where.personA;
         const ownedPersonIds = new Set(
-          state.persons.filter((person) => person.createdBy === createdBy).map((person) => person.id),
+          state.persons
+            .filter((person) => person.createdBy === createdBy && person.treeId === treeId)
+            .map((person) => person.id),
         );
         state.relationships = state.relationships.filter(
           (relationship) =>
@@ -144,10 +147,12 @@ function createFakePrisma(initialState: State, options?: { failOnCreateMany?: bo
       },
     },
     personEvent: {
-      async deleteMany(args: { where: { person: { createdBy: string } } }) {
-        const { createdBy } = args.where.person;
+      async deleteMany(args: { where: { person: { createdBy: string; treeId: string } } }) {
+        const { createdBy, treeId } = args.where.person;
         const ownedPersonIds = new Set(
-          state.persons.filter((person) => person.createdBy === createdBy).map((person) => person.id),
+          state.persons
+            .filter((person) => person.createdBy === createdBy && person.treeId === treeId)
+            .map((person) => person.id),
         );
         state.events = state.events.filter((event) => !ownedPersonIds.has(event.personId));
       },
@@ -161,8 +166,10 @@ function createFakePrisma(initialState: State, options?: { failOnCreateMany?: bo
       },
     },
     person: {
-      async deleteMany(args: { where: { createdBy: string } }) {
-        state.persons = state.persons.filter((person) => person.createdBy !== args.where.createdBy);
+      async deleteMany(args: { where: { createdBy: string; treeId: string } }) {
+        state.persons = state.persons.filter(
+          (person) => person.createdBy !== args.where.createdBy || person.treeId !== args.where.treeId,
+        );
       },
       async create(args: {
         data: Omit<State["persons"][number], "id">;
@@ -182,25 +189,33 @@ function createFakePrisma(initialState: State, options?: { failOnCreateMany?: bo
     state,
     prisma: {
       person: {
-        async findMany(args: { where: { createdBy: string } }) {
-          return state.persons.filter((person) => person.createdBy === args.where.createdBy);
+        async findMany(args: { where: { createdBy: string; treeId: string } }) {
+          return state.persons.filter(
+            (person) => person.createdBy === args.where.createdBy && person.treeId === args.where.treeId,
+          );
         },
       },
       relationship: {
-        async findMany(args: { where: { personA: { createdBy: string } } }) {
+        async findMany(args: { where: { personA: { createdBy: string; treeId: string } } }) {
           const ownedPersonIds = new Set(
             state.persons
-              .filter((person) => person.createdBy === args.where.personA.createdBy)
+              .filter(
+                (person) =>
+                  person.createdBy === args.where.personA.createdBy && person.treeId === args.where.personA.treeId,
+              )
               .map((person) => person.id),
           );
           return state.relationships.filter((relationship) => ownedPersonIds.has(relationship.personAId));
         },
       },
       personEvent: {
-        async findMany(args: { where: { person: { createdBy: string } } }) {
+        async findMany(args: { where: { person: { createdBy: string; treeId: string } } }) {
           const ownedPersonIds = new Set(
             state.persons
-              .filter((person) => person.createdBy === args.where.person.createdBy)
+              .filter(
+                (person) =>
+                  person.createdBy === args.where.person.createdBy && person.treeId === args.where.person.treeId,
+              )
               .map((person) => person.id),
           );
           return state.events.filter((event) => ownedPersonIds.has(event.personId));
@@ -241,6 +256,7 @@ describe("import-export-core", () => {
           posY: null,
           createdAt: new Date("2026-06-01T08:00:00.000Z"),
           createdBy: "user-1",
+          treeId: "tree-1",
         },
         {
           id: "person-2",
@@ -258,6 +274,7 @@ describe("import-export-core", () => {
           posY: null,
           createdAt: new Date("2026-06-01T09:00:00.000Z"),
           createdBy: "user-2",
+          treeId: "tree-2",
         },
       ],
       relationships: [],
@@ -268,7 +285,7 @@ describe("import-export-core", () => {
       revalidatePath: () => undefined,
     });
 
-    const backup = await service.exportFamilyBackupForUser("user-1");
+    const backup = await service.exportFamilyBackupForUser("user-1", "tree-1");
 
     assert.equal(backup.persons.length, 1);
     assert.equal(backup.persons[0]?.name, "张三");
@@ -299,6 +316,7 @@ describe("import-export-core", () => {
           posY: null,
           createdAt: new Date("2026-05-01T08:00:00.000Z"),
           createdBy: "user-1",
+          treeId: "tree-1",
         },
       ],
       relationships: [],
@@ -309,7 +327,7 @@ describe("import-export-core", () => {
       revalidatePath: (path) => revalidatedPaths.push(path),
     });
 
-    const summary = await service.importFamilyBackupForUser("user-1", makeBackupInput());
+    const summary = await service.importFamilyBackupForUser("user-1", "tree-1", makeBackupInput());
 
     assert.deepEqual(summary, {
       personCount: 2,
@@ -363,6 +381,7 @@ describe("import-export-core", () => {
           posY: null,
           createdAt: new Date("2026-05-01T08:00:00.000Z"),
           createdBy: "user-1",
+          treeId: "tree-1",
         },
       ],
       relationships: [
@@ -397,7 +416,7 @@ describe("import-export-core", () => {
     });
 
     await assert.rejects(
-      () => service.importFamilyBackupForUser("user-1", makeBackupInput()),
+      () => service.importFamilyBackupForUser("user-1", "tree-1", makeBackupInput()),
       /createMany failed/,
     );
 

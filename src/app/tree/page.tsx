@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import FamilyTree from "@/components/family-tree";
 import { getFamilyWorkspaceData } from "@/services/family-workspace.service";
+import { getFamilyTreeSpacesForCurrentUser } from "@/services/family-tree-space.service";
 
 type SearchParams = Promise<{
   view?: string | string[];
@@ -24,8 +25,9 @@ export default async function TreePage({
     redirect("/login");
   }
 
-  const [{ persons, relationships }, query] = await Promise.all([
+  const [{ activeTree, persons, relationships }, familyTrees, query] = await Promise.all([
     getFamilyWorkspaceData(),
+    getFamilyTreeSpacesForCurrentUser(),
     searchParams,
   ]);
 
@@ -34,6 +36,8 @@ export default async function TreePage({
 
   return (
     <FamilyTree
+      activeTree={activeTree}
+      familyTrees={familyTrees}
       persons={persons}
       relationships={relationships}
       initialState={{
