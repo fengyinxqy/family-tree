@@ -1,4 +1,4 @@
-import { ZodType } from "zod";
+﻿import { ZodType } from "zod";
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_OPENAI_MODEL = "gpt-5.5";
@@ -155,4 +155,94 @@ export async function createStructuredCompletion<T>({
 
   const parsed = JSON.parse(message.content) as unknown;
   return validator.parse(parsed);
+}
+
+
+
+export interface ChatMessage {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string;
+  tool_call_id?: string;
+  tool_calls?: Array<{
+    id: string;
+    type: "function";
+    function: { name: string; arguments: string };
+  }>;
+}
+
+export interface ChatTool {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+export interface ChatCompletionResult {
+  message: ChatMessage;
+  finishReason: string;
+}
+
+export async function createChatCompletion(params: {
+  messages: ChatMessage[];
+  tools?: ChatTool[];
+  toolChoice?: "auto" | "none";
+}): Promise<ChatCompletionResult> {
+  const { provider, apiKey, apiUrl } = getProviderConfig();
+  const model = getAgentModel();
+
+  const requestBody: Record<string, unknown> = {
+    model,
+    temperature: 0.3,
+    messages: params.messages,
+  };
+
+  if (params.tools && params.tools.length > 0) {
+    requestBody.tools = params.tools;
+    requestBody.tool_choice = params.toolChoice || "auto";
+  }
+
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  const json = (await response.json()) as {
+    choices?: Array<{
+      message?: {
+        role?: string;
+        content?: string | null;
+        tool_calls?: Array<{
+          id: string;
+          type: "function";
+          function: { name: string; arguments: string };
+        }>;
+      };
+      finish_reason?: string;
+    }>;
+    error?: { message?: string };
+  };
+
+  if (!response.ok) {
+    throw new Error(json.error?.message || "AI provider request failed.");
+  }
+
+  const choice = json.choices?.[0];
+  if (!choice?.message) {
+    throw new Error("AI provider response did not include a message.");
+  }
+
+  return {
+    message: {
+      role: (choice.message.role as ChatMessage["role"]) || "assistant",
+      content: choice.message.content || "",
+      tool_calls: choice.message.tool_calls,
+    },
+    finishReason: choice.finish_reason || "stop",
+  };
 }
