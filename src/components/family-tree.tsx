@@ -390,7 +390,6 @@ function WorkspaceCanvas({
       onEdgesChange={onEdgesChange}
       nodeTypes={{ person: PersonNode }}
       fitView={false}
-      style={{ width: "100%", height: "100%" }}
       fitViewOptions={{ padding: 0.28 }}
       minZoom={0.12}
       maxZoom={2}
