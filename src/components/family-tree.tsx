@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
@@ -581,9 +581,14 @@ export default function FamilyTree({
   const [activeGeneration, setActiveGeneration] = useState<string | null>(initialState.generation);
   const [panel, setPanel] = useState<PanelState>(initialState.panel);
   const [headerCollapsed, setHeaderCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem("family.workspace.headerCollapsed") === "true";
+    return false;
   });
+  useEffect(() => {
+    const stored = window.localStorage.getItem("family.workspace.headerCollapsed");
+    if (stored === "true") {
+      setHeaderCollapsed(true);
+    }
+  }, []);
 
   const generationGroups = useMemo(() => getGenerationGroups(persons, relationships), [persons, relationships]);
   const rootIds = useMemo(() => getRootPersonIds(persons, relationships), [persons, relationships]);
