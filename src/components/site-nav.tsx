@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Search } from "lucide-react";
+import { Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { GlobalSearch } from "@/components/global-search";
 
 const NAV_ITEMS = [
   { href: "/", label: "首页" },
@@ -45,13 +46,7 @@ export function SiteNav({ userLabel }: { userLabel: string | null }) {
         })}
       </nav>
 
-      <div className="hidden items-center gap-2 rounded-full border border-border/70 bg-card/75 px-3 py-2 lg:flex">
-        <Search className="size-4 text-muted-foreground" />
-        <span className="text-sm text-muted-foreground">搜索人物、事件、文献</span>
-        <kbd className="rounded-md border border-border/70 bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">
-          K
-        </kbd>
-      </div>
+      <GlobalSearch />
 
       <button
         type="button"

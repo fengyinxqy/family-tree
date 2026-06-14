@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { ScrollText } from "lucide-react";
 import { auth, signOut } from "@/lib/auth";
 import { SiteNav } from "@/components/site-nav";
@@ -24,7 +24,7 @@ export async function Header() {
           </div>
         </Link>
 
-        <SiteNav userLabel={session?.user?.email ?? null} />
+        <SiteNav userLabel={session?.user?.name ?? session?.user?.email ?? null} />
 
         {session?.user ? (
           <form
