@@ -85,21 +85,31 @@ export function getGenerationGroups(
   persons: Pick<PersonData, "id" | "generationLabel">[],
   relationships: RelationshipData[],
 ): GenerationGroup[] {
-  const { childrenMap } = buildFamilyMaps(persons, relationships);
+  const { spouseMap, childrenMap } = buildFamilyMaps(persons, relationships);
   const roots = getRootPersonIds(persons, relationships);
   const levels = new Map<string, number>();
   const queue: Array<[string, number]> = roots.map((rootId) => [rootId, 0]);
 
   while (queue.length > 0) {
     const [personId, level] = queue.shift()!;
-    if (levels.has(personId)) {
-      continue;
-    }
+    const existing = levels.get(personId);
+    // 单调检查：已有更优层级则跳过
+    if (existing !== undefined && existing >= level) continue;
     levels.set(personId, level);
 
+    // 子女：level + 1
     for (const childId of childrenMap.get(personId) ?? []) {
-      if (!levels.has(childId)) {
+      const childExisting = levels.get(childId);
+      if (childExisting === undefined || childExisting < level + 1) {
         queue.push([childId, level + 1]);
+      }
+    }
+
+    // 配偶：同 level（同代人）
+    for (const spouseId of spouseMap.get(personId) ?? []) {
+      const spouseExisting = levels.get(spouseId);
+      if (spouseExisting === undefined || spouseExisting < level) {
+        queue.push([spouseId, level]);
       }
     }
   }
