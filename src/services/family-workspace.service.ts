@@ -39,6 +39,7 @@ export async function getFamilyWorkspaceData(): Promise<FamilyWorkspaceData> {
       deathDate: person.deathDate,
       bio: person.bio,
       aliases: person.aliases ?? [],
+      generationNumber: person.generationNumber,
       generationLabel: person.generationLabel ?? null,
       nativePlace: person.nativePlace ?? null,
       notes: person.notes ?? null,

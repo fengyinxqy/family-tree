@@ -16,6 +16,7 @@ type PersonRecord = {
   deathDate: string | null;
   bio: string | null;
   aliases: string[];
+  generationNumber: number;
   generationLabel: string | null;
   nativePlace: string | null;
   notes: string | null;
@@ -85,6 +86,7 @@ type TransactionClient = {
         deathDate: string | null;
         bio: string | null;
         aliases: string[];
+        generationNumber: number;
         generationLabel: string | null;
         nativePlace: string | null;
         notes: string | null;
@@ -150,6 +152,7 @@ export function createImportExportService(deps: {
         deathDate: person.deathDate,
         bio: person.bio,
         aliases: person.aliases ?? [],
+        generationNumber: person.generationNumber,
         generationLabel: person.generationLabel,
         nativePlace: person.nativePlace,
         notes: person.notes,
@@ -205,6 +208,7 @@ export function createImportExportService(deps: {
             deathDate: person.deathDate,
             bio: person.bio,
             aliases: person.aliases,
+            generationNumber: person.generationNumber,
             generationLabel: person.generationLabel,
             nativePlace: person.nativePlace,
             notes: person.notes,

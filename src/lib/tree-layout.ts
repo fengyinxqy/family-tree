@@ -65,6 +65,15 @@ function assignLevels(
   spouseMap: Map<string, string[]>,
   rootIds: string[],
 ): Map<string, number> {
+  const explicitLevels = new Map<string, number>();
+  const hasExplicitGeneration = persons.some((person) => Number.isFinite(person.generationNumber));
+  if (hasExplicitGeneration) {
+    for (const person of persons) {
+      explicitLevels.set(person.id, Math.max(person.generationNumber - 1, 0));
+    }
+    return explicitLevels;
+  }
+
   const levels = new Map<string, number>();
   const visited = new Set<string>();
 
@@ -112,7 +121,6 @@ function buildEdges(
 ): TreeEdge[] {
   const edges: TreeEdge[] = [];
   const addedSpouse = new Set<string>();
-  const addedChild = new Set<string>();
 
   for (const p of persons) {
     // Spouse edges (bidirectional, only add once per pair)
@@ -128,7 +136,6 @@ function buildEdges(
         );
         // 男方 source(右) → 女方 target(左)
         const pMale = p.gender === "male";
-        const spMale = persons.find((x) => x.id === spId)?.gender === "male";
         const maleId = pMale ? p.id : spId;
         const femaleId = pMale ? spId : p.id;
         edges.push({
@@ -169,9 +176,11 @@ function distributePositions(
   persons: PersonData[],
   levels: Map<string, number>,
   spouseMap: Map<string, string[]>,
-  childrenMap: Map<string, string[]>,
-  parentMap: Map<string, string[]>,
+  _childrenMap: Map<string, string[]>,
+  _parentMap: Map<string, string[]>,
 ): Map<string, { x: number; y: number }> {
+  void _childrenMap;
+  void _parentMap;
   const positions = new Map<string, { x: number; y: number }>();
 
   // Group persons by level

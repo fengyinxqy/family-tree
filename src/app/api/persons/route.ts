@@ -29,6 +29,7 @@ export async function POST(request: Request) {
       deathDate: body.deathDate ?? null,
       bio: body.bio ?? null,
       aliases: body.aliases ?? [],
+      generationNumber: body.generationNumber ?? 1,
       generationLabel: body.generationLabel ?? null,
       nativePlace: body.nativePlace ?? null,
       notes: body.notes ?? null,

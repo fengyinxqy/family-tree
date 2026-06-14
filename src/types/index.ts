@@ -6,6 +6,7 @@ export interface PersonData {
   deathDate: string | null;
   bio: string | null;
   aliases: string[];
+  generationNumber: number;
   generationLabel: string | null;
   nativePlace: string | null;
   notes: string | null;

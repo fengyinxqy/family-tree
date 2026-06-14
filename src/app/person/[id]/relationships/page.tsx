@@ -47,6 +47,7 @@ export default function RelationshipsPage() {
           deathDate: data.deathDate,
           bio: data.bio,
           aliases: data.aliases ?? [],
+          generationNumber: data.generationNumber ?? 1,
           generationLabel: data.generationLabel ?? null,
           nativePlace: data.nativePlace ?? null,
           notes: data.notes ?? null,

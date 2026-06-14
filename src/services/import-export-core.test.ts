@@ -12,6 +12,7 @@ type State = {
     deathDate: string | null;
     bio: string | null;
     aliases: string[];
+    generationNumber: number;
     generationLabel: string | null;
     nativePlace: string | null;
     notes: string | null;
@@ -54,6 +55,7 @@ function makeBackupInput() {
         deathDate: null,
         bio: null,
         aliases: [],
+        generationNumber: 1,
         generationLabel: "父",
         nativePlace: null,
         notes: null,
@@ -69,6 +71,7 @@ function makeBackupInput() {
         deathDate: null,
         bio: "次女",
         aliases: ["小小"],
+        generationNumber: 2,
         generationLabel: "子",
         nativePlace: "宁波",
         notes: "迁居后更新",
@@ -230,6 +233,7 @@ describe("import-export-core", () => {
           deathDate: null,
           bio: null,
           aliases: [],
+          generationNumber: 1,
           generationLabel: null,
           nativePlace: null,
           notes: null,
@@ -246,6 +250,7 @@ describe("import-export-core", () => {
           deathDate: null,
           bio: null,
           aliases: [],
+          generationNumber: 1,
           generationLabel: null,
           nativePlace: null,
           notes: null,
@@ -286,6 +291,7 @@ describe("import-export-core", () => {
           deathDate: null,
           bio: null,
           aliases: [],
+          generationNumber: 1,
           generationLabel: null,
           nativePlace: null,
           notes: null,
@@ -349,6 +355,7 @@ describe("import-export-core", () => {
           deathDate: null,
           bio: null,
           aliases: [],
+          generationNumber: 1,
           generationLabel: null,
           nativePlace: null,
           notes: null,

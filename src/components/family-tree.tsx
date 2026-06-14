@@ -404,7 +404,8 @@ export default function FamilyTree({
   }, []);
 
   const selectedPerson =
-    persons.find((person) => person.id === selectedPersonId) ?? persons[0] ?? null;
+    persons.find((person) => person.id === selectedPersonId) ?? null;
+  const panelPerson = selectedPerson ?? persons[0] ?? null;
 
   const branchRootId = selectedPerson?.id ?? rootIds[0] ?? null;
   const branchPersonIds = useMemo(
@@ -463,7 +464,7 @@ export default function FamilyTree({
   }
 
   function handleSelectPerson(personId: string) {
-    applyWorkspaceState({ nextPersonId: personId });
+    applyWorkspaceState({ nextPersonId: personId, nextGeneration: null });
   }
 
   function renderMainView() {
@@ -608,7 +609,7 @@ export default function FamilyTree({
                       }
                       const currentIndex = generationGroups.findIndex((group) => group.key === activeGeneration);
                       const previous = generationGroups[Math.max(currentIndex - 1, 0)];
-                      applyWorkspaceState({ nextGeneration: previous?.key ?? null });
+                      applyWorkspaceState({ nextGeneration: previous?.key ?? null, nextPersonId: null });
                     }}
                   >
                     <ChevronUp />
@@ -621,7 +622,12 @@ export default function FamilyTree({
                       <button
                         key={group.key}
                         type="button"
-                        onClick={() => applyWorkspaceState({ nextGeneration: active ? null : group.key })}
+                        onClick={() =>
+                          applyWorkspaceState({
+                            nextGeneration: active ? null : group.key,
+                            nextPersonId: null,
+                          })
+                        }
                         className={cn(
                           "w-full rounded-[1.2rem] border px-2 py-3 text-sm transition-colors",
                           active
@@ -645,7 +651,7 @@ export default function FamilyTree({
                       }
                       const currentIndex = generationGroups.findIndex((group) => group.key === activeGeneration);
                       const next = generationGroups[Math.min(currentIndex + 1, generationGroups.length - 1)];
-                      applyWorkspaceState({ nextGeneration: next?.key ?? null });
+                      applyWorkspaceState({ nextGeneration: next?.key ?? null, nextPersonId: null });
                     }}
                   >
                     <ChevronDown />
@@ -673,10 +679,10 @@ export default function FamilyTree({
             {panel === "assistant" ? (
               <aside className="hidden w-[420px] shrink-0 border-l border-border/60 p-4 xl:block">
                 <AgentPanel
-                  selectedPerson={selectedPerson}
+                  selectedPerson={panelPerson}
                   persons={persons}
                   relationships={relationships}
-                  onDraftApplied={() => applyWorkspaceState({ nextPersonId: selectedPerson?.id ?? null })}
+                  onDraftApplied={() => applyWorkspaceState({ nextPersonId: panelPerson?.id ?? null })}
                 />
               </aside>
             ) : (

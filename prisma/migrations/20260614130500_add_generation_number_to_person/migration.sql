@@ -1,0 +1,2 @@
+ALTER TABLE "persons"
+ADD COLUMN "generation_number" INTEGER NOT NULL DEFAULT 1;

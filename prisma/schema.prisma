@@ -25,6 +25,7 @@ model Person {
   deathDate       String?        @map("death_date")
   bio             String?
   aliases         String[]       @default([])
+  generationNumber Int           @default(1) @map("generation_number")
   generationLabel String?        @map("generation_label")
   nativePlace     String?        @map("native_place")
   notes           String?

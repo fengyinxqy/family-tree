@@ -22,6 +22,7 @@ export interface CreatePersonInput {
   deathDate?: string | null;
   bio?: string | null;
   aliases?: string[];
+  generationNumber?: number;
   generationLabel?: string | null;
   nativePlace?: string | null;
   notes?: string | null;
@@ -35,6 +36,7 @@ export interface UpdatePersonInput {
   deathDate?: string | null;
   bio?: string | null;
   aliases?: string[];
+  generationNumber?: number;
   generationLabel?: string | null;
   nativePlace?: string | null;
   notes?: string | null;
@@ -51,6 +53,7 @@ export interface PersonDetailResult {
   deathDate: string | null;
   bio: string | null;
   aliases: string[];
+  generationNumber: number;
   generationLabel: string | null;
   nativePlace: string | null;
   notes: string | null;
@@ -226,6 +229,7 @@ export async function createPerson(input: CreatePersonInput) {
         deathDate: input.deathDate ?? null,
         bio: input.bio ?? null,
         aliases: input.aliases ?? [],
+        generationNumber: input.generationNumber ?? 1,
         generationLabel: input.generationLabel ?? null,
         nativePlace: input.nativePlace ?? null,
         notes: input.notes ?? null,
@@ -279,6 +283,7 @@ export async function updatePerson(id: string, input: UpdatePersonInput) {
         deathDate: input.deathDate,
         bio: input.bio,
         aliases: input.aliases,
+        generationNumber: input.generationNumber,
         generationLabel: input.generationLabel,
         nativePlace: input.nativePlace,
         notes: input.notes,

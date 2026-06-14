@@ -71,67 +71,33 @@ export function buildFamilyMaps(
 }
 
 export function getRootPersonIds(
-  persons: Pick<PersonData, "id">[],
+  persons: Pick<PersonData, "id" | "generationNumber">[],
   relationships: RelationshipData[],
 ) {
   const { parentMap } = buildFamilyMaps(persons, relationships);
+  const minimumGenerationNumber = persons.reduce(
+    (minimum, person) => Math.min(minimum, person.generationNumber || 1),
+    Number.POSITIVE_INFINITY,
+  );
 
   return persons
-    .filter((person) => (parentMap.get(person.id) ?? []).length === 0)
+    .filter((person) => person.generationNumber === minimumGenerationNumber)
+    .sort((left, right) => {
+      const leftParents = (parentMap.get(left.id) ?? []).length;
+      const rightParents = (parentMap.get(right.id) ?? []).length;
+      return leftParents - rightParents;
+    })
     .map((person) => person.id);
 }
 
 export function getGenerationGroups(
-  persons: Pick<PersonData, "id" | "generationLabel">[],
+  persons: Pick<PersonData, "id" | "generationLabel" | "generationNumber">[],
   relationships: RelationshipData[],
 ): GenerationGroup[] {
-  const { childrenMap } = buildFamilyMaps(persons, relationships);
-  const roots = getRootPersonIds(persons, relationships);
-  const levels = new Map<string, number>();
-  const queue: Array<[string, number]> = roots.map((rootId) => [rootId, 0]);
-  const bfsReached = new Set<string>();
-
-  // 第一轮 BFS：仅沿子女关系分配世代
-  while (queue.length > 0) {
-    const [personId, level] = queue.shift()!;
-    if (levels.has(personId)) continue;
-    levels.set(personId, level);
-    bfsReached.add(personId);
-
-    for (const childId of childrenMap.get(personId) ?? []) {
-      if (!levels.has(childId)) {
-        queue.push([childId, level + 1]);
-      }
-    }
-  }
-
-  // 未通过子女链到达的人（无父母记录的配偶等）暂置 level 0
-  for (const person of persons) {
-    if (!levels.has(person.id)) {
-      levels.set(person.id, 0);
-    }
-  }
-
-  // 第二轮：仅将未通过子女链到达的配偶移到对方的层级（单向传播）
-  for (const rel of relationships) {
-    if (rel.type !== "spouse") continue;
-    const a = levels.get(rel.personAId);
-    const b = levels.get(rel.personBId);
-    if (a === undefined || b === undefined || a === b) continue;
-
-    const aReached = bfsReached.has(rel.personAId);
-    const bReached = bfsReached.has(rel.personBId);
-
-    if (aReached && !bReached) {
-      levels.set(rel.personBId, a);
-    } else if (!aReached && bReached) {
-      levels.set(rel.personAId, b);
-    }
-  }
-
+  void relationships;
   const grouped = new Map<number, string[]>();
   for (const person of persons) {
-    const level = levels.get(person.id) ?? 0;
+    const level = Math.max((person.generationNumber || 1) - 1, 0);
     const current = grouped.get(level) ?? [];
     current.push(person.id);
     grouped.set(level, current);

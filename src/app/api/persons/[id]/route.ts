@@ -39,6 +39,7 @@ export async function PUT(
     if (body.deathDate !== undefined) data.deathDate = body.deathDate ?? null;
     if (body.bio !== undefined) data.bio = body.bio ?? null;
     if (body.aliases !== undefined) data.aliases = body.aliases;
+    if (body.generationNumber !== undefined) data.generationNumber = body.generationNumber;
     if (body.generationLabel !== undefined) data.generationLabel = body.generationLabel ?? null;
     if (body.nativePlace !== undefined) data.nativePlace = body.nativePlace ?? null;
     if (body.notes !== undefined) data.notes = body.notes ?? null;

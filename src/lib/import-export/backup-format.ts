@@ -13,6 +13,7 @@ export const backupPersonSchema = z.object({
   deathDate: z.string().nullable(),
   bio: z.string().nullable(),
   aliases: z.array(z.string()),
+  generationNumber: z.number().int().positive().default(1),
   generationLabel: z.string().nullable(),
   nativePlace: z.string().nullable(),
   notes: z.string().nullable(),
