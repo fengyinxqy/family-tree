@@ -1,19 +1,17 @@
 "use client";
 
-import { useId, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bot,
   Check,
-  Clock,
   GitBranch,
   Loader2,
   MessageSquareText,
   ScrollText,
   Sparkles,
   TriangleAlert,
-  User,
-  X,
+  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -27,28 +25,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import {
+  buildSuggestionChips,
+  buildSuggestionHints,
+  type SuggestionChip,
+} from "@/lib/family-graph";
 import type { IntakeDraft } from "@/lib/agent/types";
+import type { RelationshipData, WorkspacePersonData } from "@/types";
 
-type AgentTab = "intake" | "relationship";
-
-interface AgentMessage {
-  id: string;
-  role: "user" | "assistant";
-  title: string;
-  body: string;
-}
+type AgentTab = "enrich" | "relationship";
 
 interface RelationshipAgentResponse {
   ok: boolean;
@@ -75,154 +64,107 @@ interface RelationshipAgentResponse {
   };
 }
 
-interface ClarificationEntry {
-  /** 轮次序号 (1-based) */
-  round: number;
-  /** 用户补充文本 */
-  userText: string;
-  /** 提交时间戳 */
-  timestamp: number;
+interface AgentMessage {
+  id: string;
+  role: "assistant" | "user";
+  title: string;
+  body: string;
 }
 
-function ThinkingCard({ label }: { label: string }) {
+function MessageLog({ messages, busyLabel }: { messages: AgentMessage[]; busyLabel: string | null }) {
   return (
-    <div className="flex gap-3">
-      <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <Bot />
+    <div className="rounded-[1.5rem] border border-border/70 bg-background/70 p-3">
+      <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
+        <ScrollText className="size-4" />
+        最近对话
       </div>
-      <Card className="w-full border border-border/70 bg-card/88 py-3 shadow-none">
-        <CardContent className="flex items-center gap-3 px-3">
-          <div className="flex items-center gap-1.5">
-            <span className="size-2 animate-[agent-dot_1.2s_ease-in-out_infinite] rounded-full bg-primary" />
-            <span className="size-2 animate-[agent-dot_1.2s_ease-in-out_0.2s_infinite] rounded-full bg-primary/80" />
-            <span className="size-2 animate-[agent-dot_1.2s_ease-in-out_0.4s_infinite] rounded-full bg-primary/60" />
+      <div className="app-scrollbar flex max-h-72 flex-col gap-3 overflow-y-auto pr-1">
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+          >
+            {message.role === "assistant" ? (
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Bot className="size-4" />
+              </div>
+            ) : null}
+            <div
+              className={
+                message.role === "user"
+                  ? "max-w-[86%] rounded-2xl bg-primary px-3 py-2 text-sm text-primary-foreground"
+                  : "max-w-[86%] rounded-2xl border border-border/70 bg-card px-3 py-2 text-sm text-card-foreground"
+              }
+            >
+              <div className="mb-1 text-xs font-medium opacity-75">{message.title}</div>
+              <p className="whitespace-pre-wrap leading-relaxed">{message.body}</p>
+            </div>
+            {message.role === "user" ? (
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
+                <UserRound className="size-4" />
+              </div>
+            ) : null}
           </div>
-          <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium text-foreground">{label}</p>
-            <p className="text-xs text-muted-foreground">
-              正在整理人物、关系与待确认项。
-            </p>
+        ))}
+        {busyLabel ? (
+          <div className="flex gap-3">
+            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Bot className="size-4" />
+            </div>
+            <div className="flex items-center gap-2 rounded-2xl border border-border/70 bg-card px-3 py-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              {busyLabel}
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        ) : null}
+      </div>
     </div>
   );
 }
 
-function MessageBubble({ message }: { message: AgentMessage }) {
-  const isUser = message.role === "user";
-
-  return (
-    <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}>
-      {!isUser ? (
-        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <Bot />
-        </div>
-      ) : null}
-
-      <div
-        className={cn(
-          "max-w-[88%] rounded-2xl px-3 py-2 text-sm ring-1",
-          isUser
-            ? "bg-primary text-primary-foreground ring-primary/20"
-            : "bg-card text-card-foreground ring-border/80",
-        )}
-      >
-        <div className="mb-1 text-xs font-medium opacity-80">{message.title}</div>
-        <p className="whitespace-pre-wrap leading-relaxed">{message.body}</p>
-      </div>
-
-      {isUser ? (
-        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
-          <User />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function DraftSummary({
+function DraftCard({
   draft,
   onApply,
   isApplying,
-  onClarify,
-  isClarifying,
-  clarifyCount,
-  maxClarifyRounds,
-  clarificationHistory,
 }: {
   draft: IntakeDraft;
   onApply: () => void;
   isApplying: boolean;
-  onClarify?: (text: string) => void;
-  isClarifying?: boolean;
-  clarifyCount?: number;
-  maxClarifyRounds?: number;
-  clarificationHistory?: ClarificationEntry[];
 }) {
-  const [clarifyText, setClarifyText] = useState("");
-  const atMaxRounds =
-    clarifyCount !== undefined &&
-    maxClarifyRounds !== undefined &&
-    clarifyCount >= maxClarifyRounds;
-
-  function handleClarifySubmit() {
-    const text = clarifyText.trim();
-    if (!text || !onClarify) {
-      return;
-    }
-    onClarify(text);
-    setClarifyText("");
-  }
-
   return (
-    <Card size="sm" className="border border-border/70 bg-background/78">
+    <Card size="sm" className="border border-border/70 bg-background/75">
       <CardHeader>
-        <CardTitle>录入草稿</CardTitle>
+        <CardTitle>待确认草稿</CardTitle>
         <CardDescription>{draft.summary}</CardDescription>
         <CardAction>
-          <div className="flex items-center gap-2">
-            {clarifyCount !== undefined && clarifyCount > 0 ? (
-              <Badge variant="secondary">
-                第 {clarifyCount}/{maxClarifyRounds} 轮澄清
-              </Badge>
-            ) : null}
-            <Badge variant={draft.readyToApply ? "default" : "secondary"}>
-              {draft.readyToApply ? "可写入" : "待确认"}
-            </Badge>
-          </div>
+          <Badge variant={draft.readyToApply ? "default" : "secondary"}>
+            {draft.readyToApply ? "可写入" : "待确认"}
+          </Badge>
         </CardAction>
       </CardHeader>
-
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-sm font-medium">
+      <CardContent className="space-y-4">
+        <div>
+          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
             <Sparkles className="size-4 text-primary" />
             人物
           </div>
           <div className="flex flex-wrap gap-2">
             {draft.persons.map((person) => (
-              <Badge
-                key={person.ref}
-                variant={person.action === "reuse" ? "secondary" : "outline"}
-              >
+              <Badge key={person.ref} variant={person.action === "reuse" ? "secondary" : "outline"}>
                 {person.name} · {person.action === "reuse" ? "复用" : "新增"}
               </Badge>
             ))}
           </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-sm font-medium">
+        <div>
+          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
             <GitBranch className="size-4 text-primary" />
             关系
           </div>
           <div className="flex flex-wrap gap-2">
             {draft.relationships.map((relationship) => (
-              <Badge
-                key={relationship.ref}
-                variant={relationship.action === "create" ? "outline" : "secondary"}
-              >
+              <Badge key={relationship.ref} variant={relationship.action === "create" ? "outline" : "secondary"}>
                 {relationship.type === "spouse" ? "配偶" : "子女"} ·{" "}
                 {relationship.action === "create" ? "新增" : "跳过"}
               </Badge>
@@ -231,128 +173,28 @@ function DraftSummary({
         </div>
 
         {draft.ambiguities.length > 0 ? (
-          <div className="flex flex-col gap-3">
-            {draft.ambiguities.map((ambiguity, index) => (
-              <Alert key={`${ambiguity.kind}-${index}`} variant="destructive">
-                <TriangleAlert />
-                <AlertTitle>需要人工确认</AlertTitle>
-                <AlertDescription>
-                  <p>{ambiguity.message}</p>
-                  {ambiguity.question ? (
-                    <p className="mt-1 text-sm font-medium text-foreground/80">
-                      💬 {ambiguity.question}
-                    </p>
-                  ) : null}
-                  {ambiguity.options.length > 0 ? (
-                    <p className="mt-1">候选项：{ambiguity.options.join(" / ")}</p>
-                  ) : null}
-                </AlertDescription>
-              </Alert>
-            ))}
-          </div>
-        ) : null}
-
-        {draft.questions.length > 0 ? (
-          <Alert>
-            <MessageSquareText />
-            <AlertTitle>建议继续追问</AlertTitle>
-            <AlertDescription className="flex flex-col gap-1">
-              {draft.questions.map((question, index) => (
-                <p key={`${question}-${index}`}>{question}</p>
-              ))}
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
-        {/* 澄清历史时间线 */}
-        {clarificationHistory && clarificationHistory.length > 0 ? (
-          <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-background/50 p-3">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <Clock className="size-3.5" />
-              澄清历史
-            </div>
-            <div className="flex flex-col gap-2">
-              {clarificationHistory.map((entry) => (
-                <div
-                  key={entry.timestamp}
-                  className="flex items-start gap-2 text-xs"
-                >
-                  <span className="mt-0.5 shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-primary">
-                    R{entry.round}
-                  </span>
-                  <span className="text-muted-foreground">{entry.userText}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {/* 达到澄清上限提示 */}
-        {atMaxRounds && !draft.readyToApply ? (
           <Alert variant="destructive">
             <TriangleAlert />
-            <AlertTitle>已达澄清上限</AlertTitle>
-            <AlertDescription>
-              已完成 {maxClarifyRounds} 轮澄清，草稿仍无法自动解决所有歧义。
-              建议重新录入或切换到手动添加人物。
+            <AlertTitle>仍有待确认项</AlertTitle>
+            <AlertDescription className="space-y-1">
+              {draft.ambiguities.map((ambiguity, index) => (
+                <p key={`${ambiguity.kind}-${index}`}>
+                  {ambiguity.message}
+                  {ambiguity.question ? ` ${ambiguity.question}` : ""}
+                </p>
+              ))}
             </AlertDescription>
           </Alert>
-        ) : null}
-
-        {/* 澄清补充输入区 */}
-        {!draft.readyToApply && onClarify ? (
-          <div className="flex flex-col gap-2">
-            {atMaxRounds ? null : (
-              <>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="补充一句话来澄清..."
-                    value={clarifyText}
-                    onChange={(e) => setClarifyText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleClarifySubmit();
-                      }
-                    }}
-                    disabled={isClarifying}
-                    className="flex-1 bg-background/72 text-sm"
-                  />
-                  <Button
-                    size="sm"
-                    onClick={handleClarifySubmit}
-                    disabled={!clarifyText.trim() || isClarifying}
-                  >
-                    {isClarifying ? (
-                      <Loader2 data-icon="inline-start" className="animate-spin" />
-                    ) : (
-                      <MessageSquareText data-icon="inline-start" />
-                    )}
-                    补充澄清
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  输入一句补充信息（如：他的父亲叫王建国、他的性别是男），
-                  按 Enter 提交
-                </p>
-              </>
-            )}
-          </div>
         ) : null}
 
         <div className="flex justify-end">
           <Button onClick={onApply} disabled={!draft.readyToApply || isApplying}>
             {isApplying ? (
-              <>
-                <Loader2 data-icon="inline-start" className="animate-spin" />
-                正在写入
-              </>
+              <Loader2 data-icon="inline-start" className="animate-spin" />
             ) : (
-              <>
-                <Check data-icon="inline-start" />
-                确认写入家谱
-              </>
+              <Check data-icon="inline-start" />
             )}
+            确认写入
           </Button>
         </div>
       </CardContent>
@@ -360,19 +202,19 @@ function DraftSummary({
   );
 }
 
-function RelationshipSummary({ result }: { result: RelationshipAgentResponse }) {
+function RelationshipCard({ result }: { result: RelationshipAgentResponse }) {
   if (!result.ok || !result.inference || !result.sourcePerson || !result.targetPerson) {
     return (
       <Alert variant="destructive">
         <TriangleAlert />
-        <AlertTitle>暂时还没推理出来</AlertTitle>
+        <AlertTitle>关系建议暂时不可用</AlertTitle>
         <AlertDescription>{result.message}</AlertDescription>
       </Alert>
     );
   }
 
   return (
-    <Card size="sm" className="border border-border/70 bg-background/78">
+    <Card size="sm" className="border border-border/70 bg-background/75">
       <CardHeader>
         <CardTitle>关系结果</CardTitle>
         <CardDescription>
@@ -382,85 +224,67 @@ function RelationshipSummary({ result }: { result: RelationshipAgentResponse }) 
           <Badge>{result.inference.relationship ?? "已识别"}</Badge>
         </CardAction>
       </CardHeader>
-
-      <CardContent className="flex flex-col gap-3">
-        <div className="flex flex-col gap-2">
-          <div className="rounded-md border border-border/60 bg-muted/40 p-3">
-            <div className="text-sm">
-              <span className="font-semibold">{result.targetPerson.name}</span>
-              <span className="text-muted-foreground"> 是 </span>
-              <span className="font-semibold">{result.sourcePerson.name}</span>
-              <span className="text-muted-foreground"> 的</span>
-            </div>
-            <div className="text-base font-bold mt-1">
-              {result.inference.relationship ?? "已识别"}
-            </div>
-          </div>
-          {result.inference.inverseRelationship &&
-            result.inference.inverseRelationship !== result.inference.relationship && (
-              <div className="rounded-md border border-border/60 bg-muted/40 p-3">
-                <div className="text-sm">
-                  <span className="font-semibold">{result.sourcePerson.name}</span>
-                  <span className="text-muted-foreground"> 是 </span>
-                  <span className="font-semibold">{result.targetPerson.name}</span>
-                  <span className="text-muted-foreground"> 的</span>
-                </div>
-                <div className="text-base font-bold mt-1">
-                  {result.inference.inverseRelationship}
-                </div>
-              </div>
-            )}
+      <CardContent className="space-y-4">
+        <div className="rounded-2xl border border-border/70 bg-card/80 p-4">
+          <p className="text-sm text-muted-foreground">
+            {result.targetPerson.name} 是 {result.sourcePerson.name} 的
+          </p>
+          <p className="mt-1 text-lg font-semibold text-foreground">
+            {result.inference.relationship ?? "未命名关系"}
+          </p>
         </div>
 
         <Alert>
           <Bot />
-          <AlertTitle>推理说明</AlertTitle>
+          <AlertTitle>关系说明</AlertTitle>
           <AlertDescription>{result.inference.explanation}</AlertDescription>
         </Alert>
 
-        <div className="flex flex-col gap-2">
-          <div className="text-sm font-medium">关系路径</div>
-          <div className="flex flex-wrap gap-2">
-            {result.inference.path.map((hop, index) => (
-              <Badge key={`${hop.fromPersonId}-${hop.toPersonId}-${index}`} variant="outline">
-                {hop.kind === "spouse"
-                  ? "配偶"
-                  : hop.kind === "parent"
-                    ? "父母"
-                    : "子女"}
-              </Badge>
-            ))}
-          </div>
+        <div className="flex flex-wrap gap-2">
+          {result.inference.path.map((hop, index) => (
+            <Badge key={`${hop.fromPersonId}-${hop.toPersonId}-${index}`} variant="outline">
+              {hop.kind === "spouse" ? "配偶" : hop.kind === "parent" ? "父母" : "子女"}
+            </Badge>
+          ))}
         </div>
       </CardContent>
     </Card>
   );
 }
 
-export function AgentPanel() {
+export function AgentPanel({
+  selectedPerson,
+  persons,
+  relationships,
+  onDraftApplied,
+}: {
+  selectedPerson: WorkspacePersonData | null;
+  persons: WorkspacePersonData[];
+  relationships: RelationshipData[];
+  onDraftApplied?: () => void;
+}) {
   const router = useRouter();
-  const [currentTab, setCurrentTab] = useState<AgentTab>("intake");
-  const [intakeText, setIntakeText] = useState("");
+  const [currentTab, setCurrentTab] = useState<AgentTab>("enrich");
+  const [enrichText, setEnrichText] = useState("");
   const [relationshipQuestion, setRelationshipQuestion] = useState("");
   const [draft, setDraft] = useState<IntakeDraft | null>(null);
-  const [relationshipResult, setRelationshipResult] =
-    useState<RelationshipAgentResponse | null>(null);
+  const [relationshipResult, setRelationshipResult] = useState<RelationshipAgentResponse | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([
     {
       id: "assistant-welcome",
       role: "assistant",
       title: "家谱助手",
-      body: "先生成可确认的录入草稿，再安全写入家谱；也可以直接提问两个人之间的关系。",
+      body: "我会围绕当前成员帮你补全资料，也可以根据现有家谱给出关系建议。",
     },
   ]);
   const [isSubmitting, startSubmitting] = useTransition();
   const [isApplying, startApplying] = useTransition();
-  const [isClarifying, startClarifying] = useTransition();
-  const [clarifyCount, setClarifyCount] = useState(0);
-  const [clarificationHistory, setClarificationHistory] = useState<ClarificationEntry[]>([]);
-  const maxClarifyRounds = 5;
-  const intakeFieldId = useId();
-  const relationshipFieldId = useId();
+
+  const suggestionChips = useMemo(() => buildSuggestionChips(selectedPerson), [selectedPerson]);
+  const suggestionHints = useMemo(
+    () => buildSuggestionHints(selectedPerson, relationships),
+    [selectedPerson, relationships],
+  );
 
   function pushMessage(message: AgentMessage) {
     setMessages((current) => current.concat(message));
@@ -468,27 +292,32 @@ export function AgentPanel() {
 
   function summarizeDraft(nextDraft: IntakeDraft) {
     if (nextDraft.persons.length === 0 && nextDraft.relationships.length === 0) {
-      return "未能从输入中识别出人物或关系，请尝试用更具体的方式描述。";
+      return "这次输入还没有识别出可写入的人物或关系，可以换一种更具体的描述。";
     }
-    return `识别到 ${nextDraft.persons.length} 位人物、${nextDraft.relationships.length} 条关系。${
-      nextDraft.readyToApply ? "当前草稿可以直接写入。" : "当前草稿仍有待确认项。"
+
+    return `识别出 ${nextDraft.persons.length} 位人物、${nextDraft.relationships.length} 条关系。${
+      nextDraft.readyToApply ? "当前草稿可以直接写入。" : "当前草稿还有待确认项。"
     }`;
   }
 
-  function handleIntakeSubmit() {
-    const text = intakeText.trim();
+  function handleSuggestionClick(chip: SuggestionChip) {
+    setCurrentTab("relationship");
+    setRelationshipQuestion(chip.question);
+  }
+
+  function handleEnrichSubmit() {
+    const text = enrichText.trim();
     if (!text) {
-      toast.error("请先输入家谱描述。");
+      toast.error("请先输入要补全的家谱描述。");
       return;
     }
 
     pushMessage({
-      id: `user-intake-${Date.now()}`,
+      id: `user-enrich-${Date.now()}`,
       role: "user",
-      title: "家谱录入",
+      title: selectedPerson ? `补全 ${selectedPerson.name}` : "家谱补全",
       body: text,
     });
-    setIntakeText("");
 
     startSubmitting(async () => {
       try {
@@ -500,29 +329,24 @@ export function AgentPanel() {
         const json = await response.json();
 
         if (!response.ok) {
-          throw new Error(json.error || "录入请求失败");
+          throw new Error(json.error || "信息补全请求失败");
         }
 
         const nextDraft = json as IntakeDraft;
         setDraft(nextDraft);
-        setClarifyCount(0);
-        setClarificationHistory([]);
-        setRelationshipResult(null);
-
-        const isEmpty = nextDraft.persons.length === 0 && nextDraft.relationships.length === 0;
         pushMessage({
-          id: `assistant-intake-${Date.now()}`,
+          id: `assistant-enrich-${Date.now()}`,
           role: "assistant",
-          title: isEmpty ? "未能识别" : "草稿已生成",
+          title: "补全草稿已生成",
           body: summarizeDraft(nextDraft),
         });
-        toast.success(isEmpty ? "未能从输入中识别出人物或关系，请换一种方式描述。" : "录入草稿已生成。");
+        toast.success("补全草稿已生成。");
       } catch (error) {
-        const message = error instanceof Error ? error.message : "录入请求失败";
+        const message = error instanceof Error ? error.message : "信息补全请求失败";
         pushMessage({
-          id: `assistant-intake-error-${Date.now()}`,
+          id: `assistant-enrich-error-${Date.now()}`,
           role: "assistant",
-          title: "录入失败",
+          title: "补全失败",
           body: message,
         });
         toast.error(message);
@@ -543,7 +367,6 @@ export function AgentPanel() {
           body: JSON.stringify({ draft }),
         });
         const json = await response.json();
-
         if (!response.ok) {
           throw new Error(json.error || "草稿写入失败");
         }
@@ -551,109 +374,33 @@ export function AgentPanel() {
         pushMessage({
           id: `assistant-apply-${Date.now()}`,
           role: "assistant",
-          title: "写入成功",
-          body: "草稿已写入当前家谱，树图会自动刷新。",
+          title: "写入完成",
+          body: "补全草稿已写入当前家谱，我已经为你刷新工作台。",
         });
         setDraft(null);
-        setIntakeText("");
-        setClarifyCount(0);
-        setClarificationHistory([]);
         router.refresh();
+        onDraftApplied?.();
         toast.success("家谱已更新。");
       } catch (error) {
-        const message = error instanceof Error ? error.message : "草稿写入失败";
-        toast.error(message);
+        toast.error(error instanceof Error ? error.message : "草稿写入失败");
       }
     });
   }
 
-  function handleClarify(clarificationText: string) {
-    if (!draft || !intakeText) {
-      return;
-    }
-
-    if (clarifyCount >= maxClarifyRounds) {
-      toast.error("已达到最大澄清轮次，请重新开始或手动录入。");
-      return;
-    }
-
-    const nextRound = clarifyCount + 1;
-    const entry: ClarificationEntry = {
-      round: nextRound,
-      userText: clarificationText,
-      timestamp: Date.now(),
-    };
-
-    pushMessage({
-      id: `user-clarify-${Date.now()}`,
-      role: "user",
-      title: `补充澄清 (第 ${nextRound} 轮)`,
-      body: clarificationText,
-    });
-
-    startClarifying(async () => {
-      try {
-        const response = await fetch("/api/agent/intake", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: intakeText,
-            previousDraft: draft,
-            clarificationText,
-          }),
-        });
-        const json = await response.json();
-
-        if (!response.ok) {
-          throw new Error(json.error || "澄清请求失败");
-        }
-
-        const nextDraft = json as IntakeDraft;
-        setDraft(nextDraft);
-        setClarifyCount(nextRound);
-        setClarificationHistory((prev) => [...prev, entry]);
-
-        const isEmpty = nextDraft.persons.length === 0 && nextDraft.relationships.length === 0;
-        pushMessage({
-          id: `assistant-clarify-${Date.now()}`,
-          role: "assistant",
-          title: isEmpty ? "未能识别" : `草稿已更新 (第 ${nextRound} 轮澄清)`,
-          body: summarizeDraft(nextDraft),
-        });
-        toast.success(
-          isEmpty
-            ? "未能从输入中识别出人物或关系，请换一种方式描述。"
-            : nextDraft.readyToApply
-              ? "歧义已全部解决，可以写入家谱。"
-              : "草稿已更新，仍有待确认项。",
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "澄清请求失败";
-        pushMessage({
-          id: `assistant-clarify-error-${Date.now()}`,
-          role: "assistant",
-          title: "澄清失败",
-          body: message,
-        });
-        toast.error(message);
-      }
-    });
-  }
-
-  function handleRelationshipSubmit() {
-    const question = relationshipQuestion.trim();
+  function handleRelationshipSubmit(customQuestion?: string) {
+    const question = (customQuestion ?? relationshipQuestion).trim();
     if (!question) {
       toast.error("请先输入关系问题。");
       return;
     }
 
+    setRelationshipQuestion(question);
     pushMessage({
       id: `user-relationship-${Date.now()}`,
       role: "user",
-      title: "关系提问",
+      title: "关系建议",
       body: question,
     });
-    setRelationshipQuestion("");
 
     startSubmitting(async () => {
       try {
@@ -665,36 +412,27 @@ export function AgentPanel() {
         const json = await response.json();
 
         if (!response.ok) {
-          throw new Error(json.error || "关系推理失败");
+          throw new Error(json.error || "关系建议请求失败");
         }
 
         const nextResult = json as RelationshipAgentResponse;
         setRelationshipResult(nextResult);
-        setDraft(null);
         pushMessage({
           id: `assistant-relationship-${Date.now()}`,
           role: "assistant",
-          title: "关系结果",
+          title: "关系建议已返回",
           body:
             nextResult.ok && nextResult.inference?.relationship
-              ? [
-                  `${nextResult.targetPerson?.name} 是 ${nextResult.sourcePerson?.name} 的${nextResult.inference.relationship}`,
-                  nextResult.inference.inverseRelationship &&
-                  nextResult.inference.inverseRelationship !== nextResult.inference.relationship
-                    ? `${nextResult.sourcePerson?.name} 是 ${nextResult.targetPerson?.name} 的${nextResult.inference.inverseRelationship}`
-                    : null,
-                ]
-                  .filter(Boolean)
-                  .join("\n")
+              ? `${nextResult.targetPerson?.name} 是 ${nextResult.sourcePerson?.name} 的 ${nextResult.inference.relationship}。`
               : nextResult.message,
         });
-        toast.success("关系推理完成。");
+        toast.success("关系建议已更新。");
       } catch (error) {
-        const message = error instanceof Error ? error.message : "关系推理失败";
+        const message = error instanceof Error ? error.message : "关系建议请求失败";
         pushMessage({
           id: `assistant-relationship-error-${Date.now()}`,
           role: "assistant",
-          title: "提问失败",
+          title: "关系建议失败",
           body: message,
         });
         toast.error(message);
@@ -703,40 +441,42 @@ export function AgentPanel() {
   }
 
   return (
-    <Card className="flex h-full min-h-0 flex-col rounded-none border-0 bg-transparent shadow-none ring-0">
-      <CardHeader className="border-b border-border/70 bg-card/56 backdrop-blur">
-        <CardTitle className="flex items-center gap-2 text-[1.05rem]">
+    <Card className="flex h-full min-h-0 flex-col rounded-[1.9rem] border border-border/70 bg-card/86 shadow-none">
+      <CardHeader className="border-b border-border/70">
+        <CardTitle className="flex items-center gap-2 text-[1.1rem]">
           <Bot className="text-primary" />
-          家谱助手
+          AI 修谱助手
         </CardTitle>
-        <CardDescription className="text-balance">
-          支持录入草稿生成与人物关系问答。
-        </CardDescription>
-        <CardAction>
-          <Badge variant="secondary">AI workflow</Badge>
-        </CardAction>
+        <CardDescription>围绕当前成员做信息补全与关系建议，不包含识别导入。</CardDescription>
       </CardHeader>
 
       <CardContent className="app-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pt-4">
-        <div className="rounded-[1.4rem] border border-border/70 bg-background/55 p-3">
-          <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            <ScrollText className="size-4" />
-            conversation log
+        <div className="rounded-[1.4rem] border border-border/70 bg-background/68 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+                当前上下文
+              </p>
+              <p className="mt-1 text-sm font-medium text-foreground">
+                {selectedPerson ? selectedPerson.name : "未选中成员"}
+              </p>
+            </div>
+            <Badge variant="secondary">{persons.length} 位成员</Badge>
           </div>
-          <div className="app-scrollbar flex min-h-[22rem] max-h-[32rem] flex-col gap-3 overflow-y-auto pr-1 pt-1">
-            {messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
+          <div className="mt-3 space-y-2">
+            {suggestionHints.map((hint) => (
+              <div key={hint.id} className="rounded-2xl border border-border/60 bg-card/75 px-3 py-2">
+                <p className="text-sm font-medium text-foreground">{hint.title}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{hint.description}</p>
+              </div>
             ))}
-            {isSubmitting ? (
-              <ThinkingCard
-                label={
-                  currentTab === "intake" ? "正在生成录入草稿" : "正在推理人物关系"
-                }
-              />
-            ) : null}
-            {isApplying ? <ThinkingCard label="正在写入家谱" /> : null}
           </div>
         </div>
+
+        <MessageLog
+          messages={messages}
+          busyLabel={isSubmitting ? "正在整理回复…" : isApplying ? "正在写入家谱…" : null}
+        />
 
         <Separator />
 
@@ -746,121 +486,70 @@ export function AgentPanel() {
           className="flex flex-col gap-0"
         >
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="intake">家谱录入</TabsTrigger>
-            <TabsTrigger value="relationship">关系问答</TabsTrigger>
+            <TabsTrigger value="enrich">信息补全</TabsTrigger>
+            <TabsTrigger value="relationship">关系建议</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="intake" className="mt-4 flex flex-col gap-4 pr-1">
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor={intakeFieldId}>口述家谱</FieldLabel>
-                <FieldContent>
-                  <div className="relative">
-                    <Textarea
-                      id={intakeFieldId}
-                      placeholder="例如：我叫王明，父亲王建国，母亲李秀英，我有一个姐姐王丽。"
-                      value={intakeText}
-                      onChange={(event) => setIntakeText(event.target.value)}
-                      className="min-h-32 bg-background/72 pr-8"
-                    />
-                    {intakeText ? (
-                      <button
-                        type="button"
-                        onClick={() => setIntakeText("")}
-                        className="absolute top-2 right-2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                        aria-label="清除输入"
-                      >
-                        <X className="size-4" />
-                      </button>
-                    ) : null}
-                  </div>
-                  <FieldDescription>
-                    助手会先抽取人物与关系，生成待确认草稿，不会直接写库。
-                  </FieldDescription>
-                </FieldContent>
-              </Field>
-            </FieldGroup>
-
+          <TabsContent value="enrich" className="mt-4 space-y-4">
+            <Textarea
+              value={enrichText}
+              onChange={(event) => setEnrichText(event.target.value)}
+              placeholder={
+                selectedPerson
+                  ? `例如：补充 ${selectedPerson.name} 的生平、配偶、子女和迁徙信息。也可以请我找出这个人当前最明显的资料缺口。`
+                  : "例如：帮我补全当前家谱里缺失的人物资料和关系。"
+              }
+              className="min-h-32 bg-background/72"
+            />
             <div className="flex justify-end">
-              <Button onClick={handleIntakeSubmit} disabled={isSubmitting}>
+              <Button onClick={handleEnrichSubmit} disabled={isSubmitting}>
                 {isSubmitting ? (
-                  <>
-                    <Loader2 data-icon="inline-start" className="animate-spin" />
-                    正在解析
-                  </>
+                  <Loader2 data-icon="inline-start" className="animate-spin" />
                 ) : (
-                  <>
-                    <Sparkles data-icon="inline-start" />
-                    生成草稿
-                  </>
+                  <Sparkles data-icon="inline-start" />
                 )}
+                生成补全草稿
               </Button>
             </div>
-
-            {draft && (draft.persons.length > 0 || draft.relationships.length > 0) ? (
-              <DraftSummary
-                draft={draft}
-                onApply={handleApplyDraft}
-                isApplying={isApplying}
-                onClarify={handleClarify}
-                isClarifying={isClarifying}
-                clarifyCount={clarifyCount}
-                maxClarifyRounds={maxClarifyRounds}
-                clarificationHistory={clarificationHistory}
-              />
-            ) : null}
+            {draft ? <DraftCard draft={draft} onApply={handleApplyDraft} isApplying={isApplying} /> : null}
           </TabsContent>
 
-          <TabsContent value="relationship" className="mt-4 flex flex-col gap-4 pr-1">
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor={relationshipFieldId}>关系问题</FieldLabel>
-                <FieldContent>
-                  <div className="relative">
-                    <Input
-                      id={relationshipFieldId}
-                      placeholder="例如：王丽和王建国是什么关系？"
-                      value={relationshipQuestion}
-                      onChange={(event) => setRelationshipQuestion(event.target.value)}
-                      className="bg-background/72 pr-8"
-                    />
-                    {relationshipQuestion ? (
-                      <button
-                        type="button"
-                        onClick={() => setRelationshipQuestion("")}
-                        className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                        aria-label="清除输入"
-                      >
-                        <X className="size-4" />
-                      </button>
-                    ) : null}
-                  </div>
-                  <FieldDescription>
-                    适合询问两个人之间的直接或间接亲属关系。
-                  </FieldDescription>
-                </FieldContent>
-              </Field>
-            </FieldGroup>
-
+          <TabsContent value="relationship" className="mt-4 space-y-4">
+            <div className="space-y-3">
+              <Input
+                value={relationshipQuestion}
+                onChange={(event) => setRelationshipQuestion(event.target.value)}
+                placeholder={
+                  selectedPerson
+                    ? `例如：${selectedPerson.name} 和某位成员是什么关系？`
+                    : "例如：张三和李四是什么关系？"
+                }
+                className="bg-background/72"
+              />
+              <div className="flex flex-wrap gap-2">
+                {suggestionChips.map((chip) => (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    onClick={() => handleSuggestionClick(chip)}
+                    className="rounded-full border border-border/70 bg-card/72 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="flex justify-end">
-              <Button onClick={handleRelationshipSubmit} disabled={isSubmitting}>
+              <Button onClick={() => handleRelationshipSubmit()} disabled={isSubmitting}>
                 {isSubmitting ? (
-                  <>
-                    <Loader2 data-icon="inline-start" className="animate-spin" />
-                    正在推理
-                  </>
+                  <Loader2 data-icon="inline-start" className="animate-spin" />
                 ) : (
-                  <>
-                    <MessageSquareText data-icon="inline-start" />
-                    计算关系
-                  </>
+                  <MessageSquareText data-icon="inline-start" />
                 )}
+                获取关系建议
               </Button>
             </div>
-
-            {relationshipResult ? (
-              <RelationshipSummary result={relationshipResult} />
-            ) : null}
+            {relationshipResult ? <RelationshipCard result={relationshipResult} /> : null}
           </TabsContent>
         </Tabs>
       </CardContent>

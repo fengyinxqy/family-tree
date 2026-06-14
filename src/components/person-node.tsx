@@ -87,17 +87,13 @@ function PersonNodeComponent({ data, selected }: NodeProps) {
         className="!right-[-6px] !size-3 !border-2 !border-background !bg-primary shadow-sm"
       />
 
-      <Link
-        href={`/person/${person.id}`}
+      <div
         className={cn(
           "app-frosted relative flex w-[190px] items-start gap-3 overflow-hidden rounded-[1.35rem] border px-3.5 py-3 text-left shadow-[0_14px_32px_color-mix(in_oklch,var(--foreground)_10%,transparent)] transition-all duration-200",
           "bg-gradient-to-br",
           palette.frame,
           palette.border,
         )}
-        onClick={(event) => {
-          event.stopPropagation();
-        }}
       >
         <div
           aria-hidden="true"
@@ -123,11 +119,20 @@ function PersonNodeComponent({ data, selected }: NodeProps) {
           </div>
         </div>
 
-        <ArrowRight
-          className="mt-1 size-4 shrink-0 text-muted-foreground/60 transition-colors group-hover:text-primary"
-          strokeWidth={1.8}
-        />
-      </Link>
+        <Link
+          href={`/person/${person.id}`}
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+          className="mt-1 inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background/65 text-muted-foreground transition-colors hover:text-primary"
+          aria-label={`查看 ${person.name} 档案`}
+        >
+          <ArrowRight
+            className="size-4 transition-colors group-hover:text-primary"
+            strokeWidth={1.8}
+          />
+        </Link>
+      </div>
     </div>
   );
 }

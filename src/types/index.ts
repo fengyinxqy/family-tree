@@ -25,6 +25,10 @@ export interface PersonEventData {
   sortOrder: number;
 }
 
+export interface WorkspacePersonData extends PersonData {
+  events: PersonEventData[];
+}
+
 export interface RelationshipData {
   id: string;
   type: "spouse" | "child";

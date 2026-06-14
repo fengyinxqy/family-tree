@@ -1,0 +1,68 @@
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { redirect } from "next/navigation";
+import type { RelationshipData, WorkspacePersonData } from "@/types";
+
+export interface FamilyWorkspaceData {
+  persons: WorkspacePersonData[];
+  relationships: RelationshipData[];
+}
+
+export async function getFamilyWorkspaceData(): Promise<FamilyWorkspaceData> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+
+  const [persons, relationships] = await Promise.all([
+    prisma.person.findMany({
+      where: { createdBy: session.user.id },
+      include: {
+        events: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.relationship.findMany({
+      where: {
+        personA: { createdBy: session.user.id },
+      },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    }),
+  ]);
+
+  return {
+    persons: persons.map((person) => ({
+      id: person.id,
+      name: person.name,
+      gender: person.gender as "male" | "female",
+      birthDate: person.birthDate,
+      deathDate: person.deathDate,
+      bio: person.bio,
+      aliases: person.aliases ?? [],
+      generationLabel: person.generationLabel ?? null,
+      nativePlace: person.nativePlace ?? null,
+      notes: person.notes ?? null,
+      posX: person.posX,
+      posY: person.posY,
+      createdAt: person.createdAt.toISOString(),
+      events: person.events.map((event) => ({
+        id: event.id,
+        personId: event.personId,
+        type: event.type as "birth" | "death" | "marriage" | "migration" | "other",
+        title: event.title,
+        dateLabel: event.dateLabel,
+        location: event.location,
+        description: event.description,
+        sortOrder: event.sortOrder,
+      })),
+    })),
+    relationships: relationships.map((relationship) => ({
+      id: relationship.id,
+      type: relationship.type as "spouse" | "child",
+      personAId: relationship.personAId,
+      personBId: relationship.personBId,
+      label: relationship.label,
+      sortOrder: relationship.sortOrder,
+    })),
+  };
+}

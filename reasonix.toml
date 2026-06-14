@@ -1,0 +1,6 @@
+config_version = 2
+default_model = "deepseek-pro/deepseek-v4-pro"
+language = "zh"
+
+[agent]
+auto_plan = "off"

@@ -1,4 +1,18 @@
 schema: spec-driven
+context: |
+  Workflow:
+  - Codex GPT-5.4 owns feature exploration, solution design, and OpenSpec proposal generation.
+  - Reasonix with DeepSeek v4 Pro owns approved implementation work in this repository.
+  - OpenSpec tasks should be written as implementation-sized handoff steps.
+  Project constraints:
+  - This repo uses Next.js 16; implementation agents must read the relevant guides in node_modules/next/dist/docs/ before editing Next.js code.
+
+rules:
+  tasks:
+    - Break work into implementation-sized tasks that can be handed to Reasonix independently.
+    - Each task should have a clear done condition and avoid bundling unrelated work.
+  design:
+    - Call out implementation sequencing, dependencies, and validation steps needed by the implementation agent.
 
 # Project context (optional)
 # This is shown to AI when creating artifacts.
