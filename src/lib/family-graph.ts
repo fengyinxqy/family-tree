@@ -85,16 +85,18 @@ export function getGenerationGroups(
   persons: Pick<PersonData, "id" | "generationLabel">[],
   relationships: RelationshipData[],
 ): GenerationGroup[] {
-  const { spouseMap, childrenMap } = buildFamilyMaps(persons, relationships);
+  const { childrenMap } = buildFamilyMaps(persons, relationships);
   const roots = getRootPersonIds(persons, relationships);
   const levels = new Map<string, number>();
   const queue: Array<[string, number]> = roots.map((rootId) => [rootId, 0]);
+  const bfsReached = new Set<string>();
 
   // 第一轮 BFS：仅沿子女关系分配世代
   while (queue.length > 0) {
     const [personId, level] = queue.shift()!;
     if (levels.has(personId)) continue;
     levels.set(personId, level);
+    bfsReached.add(personId);
 
     for (const childId of childrenMap.get(personId) ?? []) {
       if (!levels.has(childId)) {
@@ -110,18 +112,20 @@ export function getGenerationGroups(
     }
   }
 
-  // 第二轮：配偶代际稳定化 — 配偶应属同代
-  const spouseEdges = relationships.filter((r) => r.type === "spouse");
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const rel of spouseEdges) {
-      const a = levels.get(rel.personAId);
-      const b = levels.get(rel.personBId);
-      if (a === undefined || b === undefined || a === b) continue;
-      const target = Math.max(a, b);
-      if (a !== target) { levels.set(rel.personAId, target); changed = true; }
-      if (b !== target) { levels.set(rel.personBId, target); changed = true; }
+  // 第二轮：仅将未通过子女链到达的配偶移到对方的层级（单向传播）
+  for (const rel of relationships) {
+    if (rel.type !== "spouse") continue;
+    const a = levels.get(rel.personAId);
+    const b = levels.get(rel.personBId);
+    if (a === undefined || b === undefined || a === b) continue;
+
+    const aReached = bfsReached.has(rel.personAId);
+    const bReached = bfsReached.has(rel.personBId);
+
+    if (aReached && !bReached) {
+      levels.set(rel.personBId, a);
+    } else if (!aReached && bReached) {
+      levels.set(rel.personAId, b);
     }
   }
 
