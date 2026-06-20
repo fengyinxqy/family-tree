@@ -14,6 +14,31 @@ export const ACTIVE_RELATIONSHIP_WHERE = {
   deletedAt: null,
 } as const satisfies Prisma.RelationshipWhereInput;
 
+export const ACTIVE_MATERIAL_WHERE = {
+  deletedAt: null,
+} as const satisfies Prisma.SourceMaterialWhereInput;
+
+export const ACTIVE_MEDIA_WHERE = {
+  deletedAt: null,
+  material: { deletedAt: null },
+} as const satisfies Prisma.MediaObjectWhereInput;
+
+export const ACTIVE_MATERIAL_LINK_WHERE = {
+  deletedAt: null,
+  material: { deletedAt: null },
+  OR: [
+    { person: { deletedAt: null } },
+    { personEvent: { person: { deletedAt: null } } },
+  ],
+} as const satisfies Prisma.MaterialLinkWhereInput;
+
+export function activeMaterialInTree(
+  createdBy: string,
+  treeId: string,
+): Prisma.SourceMaterialWhereInput {
+  return { deletedAt: null, createdBy, treeId };
+}
+
 /**
  * 活跃人员+指定创建者和树的查询条件
  */

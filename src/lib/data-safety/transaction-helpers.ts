@@ -7,7 +7,7 @@ type TxClient = Omit<
 >;
 
 interface AuditEntryData {
-  entityType: "person" | "relationship" | "person_event" | "snapshot";
+  entityType: "person" | "relationship" | "person_event" | "snapshot" | "source_material" | "media_object" | "material_link";
   entityId: string;
   action: "create" | "update" | "delete" | "restore" | "snapshot_create";
   beforeJson?: Prisma.InputJsonValue | null;

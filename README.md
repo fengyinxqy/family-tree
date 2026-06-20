@@ -272,6 +272,7 @@ target.png       项目目标效果图
 - 人物与关系维护
 - AI 录入草稿与关系问答接口
 - 数据导入导出
+- 私有文献与媒体资料库（扫描件、照片、PDF、人物/事件关联）
 
 目前更适合定位为：
 - **AI 产品原型**
@@ -286,6 +287,16 @@ target.png       项目目标效果图
 - Node.js >= 20
 - PostgreSQL（通过 `DATABASE_URL` 环境变量配置）
 - 首次运行前执行 `npx prisma migrate deploy` 初始化数据库
+
+### 文献与媒体存储
+
+- `FILE_STORAGE_ROOT`：私有文件根目录，必须位于 `public/` 之外；开发环境默认 `.data/materials`。
+- 生产环境必须显式配置 `FILE_STORAGE_ROOT` 为持久卷或持久文件系统路径；临时/serverless 文件系统不受支持。
+- `FILE_MAX_BYTES`：单文件最大字节数，默认 `20971520`（20 MiB）。
+- `MATERIAL_MAX_FILES`：单条资料最多文件数，默认 `50`。
+- 支持 PDF、JPEG、PNG、WebP 与 TIFF；服务端会校验文件签名、声明类型、大小和 SHA-256。
+- 导出默认生成 V2 ZIP 交换包，包含 JSON 清单与 `files/` 载荷；仍支持导入旧版 V1 JSON 备份。
+- 文件下载始终经过家谱授权接口，不应把存储目录映射为静态公开路径。
 
 ### 质量检查命令
 

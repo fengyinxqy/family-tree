@@ -76,6 +76,14 @@ export interface PersonDetailResult {
   treeId: string;
   events: PersonEventData[];
   siblings: PersonSiblingData[];
+  relatedMaterials: Array<{
+    id: string;
+    title: string;
+    category: string;
+    eraLabel: string | null;
+    contributor: string | null;
+    fileCount: number;
+  }>;
   relationsA: Array<{
     id: string;
     type: string;
@@ -127,7 +135,8 @@ export async function getPersons() {
 
   const activeTree = await getActiveFamilyTreeForUser(session.user.id, session.user.name);
   return prisma.person.findMany({
-    where: { createdBy: session.user.id, treeId: activeTree.id },
+    where: { createdBy: session.user.id, treeId: activeTree.id, deletedAt: null },
+    include: { events: { orderBy: { sortOrder: "asc" } } },
     orderBy: { createdAt: "asc" },
   });
 }
@@ -214,10 +223,31 @@ export async function getPerson(id: string): Promise<PersonDetailResult> {
   }
 
   const siblings = await getDerivedSiblings(id, person.gender, person.relationsB as PersonDetailResult["relationsB"]);
+  const materialLinks = await prisma.materialLink.findMany({
+    where: {
+      personId: id,
+      deletedAt: null,
+      material: { deletedAt: null, treeId: person.treeId },
+    },
+    include: {
+      material: {
+        include: { _count: { select: { files: { where: { deletedAt: null } } } } },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
 
   return {
-    ...(person as unknown as Omit<PersonDetailResult, "siblings">),
+    ...(person as unknown as Omit<PersonDetailResult, "siblings" | "relatedMaterials">),
     siblings,
+    relatedMaterials: materialLinks.map((link) => ({
+      id: link.material.id,
+      title: link.material.title,
+      category: link.material.category,
+      eraLabel: link.material.eraLabel,
+      contributor: link.material.contributor,
+      fileCount: link.material._count.files,
+    })),
   };
 }
 

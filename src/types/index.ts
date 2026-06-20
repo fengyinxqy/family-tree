@@ -66,3 +66,49 @@ export interface RelationshipSummary {
   hasSpouse: boolean;
   hasChild: boolean;
 }
+
+export type MaterialCategory =
+  | "genealogy"
+  | "document"
+  | "photo"
+  | "certificate"
+  | "oral_history"
+  | "other";
+
+export interface MaterialFileData {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  byteSize: number;
+  contentHash: string;
+  displayOrder: number;
+}
+
+export interface MaterialLinkData {
+  id: string;
+  personId: string | null;
+  personEventId: string | null;
+}
+
+export interface SourceMaterialData {
+  id: string;
+  title: string;
+  category: MaterialCategory;
+  source: string | null;
+  eraLabel: string | null;
+  contributor: string | null;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+  files: MaterialFileData[];
+  links: MaterialLinkData[];
+}
+
+export interface RelatedMaterialData {
+  id: string;
+  title: string;
+  category: MaterialCategory;
+  eraLabel: string | null;
+  contributor: string | null;
+  fileCount: number;
+}

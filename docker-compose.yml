@@ -6,6 +6,11 @@ services:
     environment:
       - DATABASE_URL=postgresql://family:family123@postgres:5432/familydb
       - AUTH_SECRET=${AUTH_SECRET:-supersecret-change-me}
+      - FILE_STORAGE_ROOT=/app/data/materials
+      - FILE_MAX_BYTES=${FILE_MAX_BYTES:-20971520}
+      - MATERIAL_MAX_FILES=${MATERIAL_MAX_FILES:-50}
+    volumes:
+      - materialdata:/app/data/materials
     depends_on:
       postgres:
         condition: service_healthy
@@ -28,3 +33,4 @@ services:
 
 volumes:
   pgdata:
+  materialdata:

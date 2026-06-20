@@ -1,7 +1,11 @@
 export {
   ACTIVE_PERSON_WHERE,
   ACTIVE_RELATIONSHIP_WHERE,
+  ACTIVE_MATERIAL_WHERE,
+  ACTIVE_MEDIA_WHERE,
+  ACTIVE_MATERIAL_LINK_WHERE,
   activePersonInTree,
+  activeMaterialInTree,
   activeRelationshipInTree,
   READ_MODE,
 } from "./active-queries";

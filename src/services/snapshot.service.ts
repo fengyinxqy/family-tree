@@ -17,6 +17,11 @@ import {
   buildRestorePayloads,
 } from "@/lib/import-export/backup-format";
 import { createImportExportService } from "@/services/import-export-core";
+import {
+  assertSnapshotFileObjectsAvailable,
+  buildMaterialSnapshotDocument,
+  validateMaterialSnapshotDocument,
+} from "@/lib/data-safety/material-snapshot";
 
 const { exportFamilyBackupForUser } = createImportExportService({
   prisma,
@@ -31,6 +36,8 @@ export interface SnapshotListItem {
   personCount: number;
   relationshipCount: number;
   eventCount: number;
+  materialCount: number;
+  fileCount: number;
   createdAt: Date;
 }
 
@@ -40,6 +47,7 @@ export async function createSnapshot(reason: "manual" | "pre_import" | "pre_rest
   if (!userId) throw new Error("未登录");
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
   const backup = await exportFamilyBackupForUser(userId, activeTree.id);
+  const snapshotDocument = await buildMaterialSnapshotDocument(userId, activeTree.id, backup);
 
   const result = await prisma.$transaction(async (tx) => {
     const revision = await getTreeRevision(tx, activeTree.id);
@@ -50,10 +58,12 @@ export async function createSnapshot(reason: "manual" | "pre_import" | "pre_rest
         version: 1,
         sourceRevision: revision,
         creatorId: userId,
-        snapshotJson: backup as Prisma.InputJsonValue,
+        snapshotJson: snapshotDocument as Prisma.InputJsonValue,
         personCount: backup.persons.length,
         relationshipCount: backup.relationships.length,
         eventCount: backup.events.length,
+        materialCount: snapshotDocument.materials.length,
+        fileCount: snapshotDocument.mediaObjects.length,
       },
     });
     await createAuditBatch(tx, {
@@ -76,7 +86,7 @@ export async function getSnapshotList(): Promise<SnapshotListItem[]> {
   return prisma.familySnapshot.findMany({
     where: { treeId: activeTree.id },
     orderBy: { createdAt: "desc" },
-    select: { id: true, reason: true, version: true, sourceRevision: true, personCount: true, relationshipCount: true, eventCount: true, createdAt: true },
+    select: { id: true, reason: true, version: true, sourceRevision: true, personCount: true, relationshipCount: true, eventCount: true, materialCount: true, fileCount: true, createdAt: true },
     take: 50,
   });
 }
@@ -123,8 +133,10 @@ export async function executeImport(confirmationId: string, input: unknown) {
     const currentRevision = await getTreeRevision(tx, activeTree.id);
     await consumeConfirmation(tx, { confirmationId, treeId: activeTree.id, userId, kind: "import", input, currentRevision });
     const backup = await exportFamilyBackupForUser(userId, activeTree.id);
-    await tx.familySnapshot.create({ data: { treeId: activeTree.id, reason: "pre_import", version: 1, sourceRevision: currentRevision, creatorId: userId, snapshotJson: backup as Prisma.InputJsonValue, personCount: backup.persons.length, relationshipCount: backup.relationships.length, eventCount: backup.events.length } });
+    const snapshotDocument = await buildMaterialSnapshotDocument(userId, activeTree.id, backup);
+    await tx.familySnapshot.create({ data: { treeId: activeTree.id, reason: "pre_import", version: 2, sourceRevision: currentRevision, creatorId: userId, snapshotJson: snapshotDocument as Prisma.InputJsonValue, personCount: backup.persons.length, relationshipCount: backup.relationships.length, eventCount: backup.events.length, materialCount: snapshotDocument.materials.length, fileCount: snapshotDocument.mediaObjects.length } });
     const document = validateFamilyBackupDocument(input);
+    await tx.sourceMaterial.deleteMany({ where: { treeId: activeTree.id } });
     await tx.relationship.deleteMany({ where: { personA: { createdBy: userId, treeId: activeTree.id } } });
     await tx.personEvent.deleteMany({ where: { person: { createdBy: userId, treeId: activeTree.id } } });
     await tx.person.deleteMany({ where: { createdBy: userId, treeId: activeTree.id } });
@@ -150,7 +162,8 @@ export async function previewSnapshotRestore(snapshotId: string) {
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
   const snapshot = await prisma.familySnapshot.findUnique({ where: { id: snapshotId } });
   if (!snapshot || snapshot.treeId !== activeTree.id) throw new Error("快照不存在或不属于当前家谱");
-  const document = validateFamilyBackupDocument(snapshot.snapshotJson as unknown);
+  const document = validateMaterialSnapshotDocument(snapshot.snapshotJson as unknown);
+  await assertSnapshotFileObjectsAvailable(document);
   const revision = await getTreeRevision(prisma, activeTree.id);
   const preview = {
     ...snapshot,
@@ -158,6 +171,8 @@ export async function previewSnapshotRestore(snapshotId: string) {
       personCount: document.persons.length,
       relationshipCount: document.relationships.length,
       eventCount: document.events.length,
+      materialCount: document.materials.length,
+      fileCount: document.mediaObjects.length,
       createdAt: snapshot.createdAt,
       sourceRevision: snapshot.sourceRevision,
       currentRevision: revision,
@@ -175,14 +190,17 @@ export async function executeSnapshotRestore(confirmationId: string, snapshotId:
   if (!userId) throw new Error("未登录");
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
   const currentBackup = await exportFamilyBackupForUser(userId, activeTree.id);
+  const currentSnapshot = await buildMaterialSnapshotDocument(userId, activeTree.id, currentBackup);
   const currentRevision = await getTreeRevision(prisma, activeTree.id);
-  await prisma.familySnapshot.create({ data: { treeId: activeTree.id, reason: "pre_restore", version: 1, sourceRevision: currentRevision, creatorId: userId, snapshotJson: currentBackup as Prisma.InputJsonValue, personCount: currentBackup.persons.length, relationshipCount: currentBackup.relationships.length, eventCount: currentBackup.events.length } });
+  await prisma.familySnapshot.create({ data: { treeId: activeTree.id, reason: "pre_restore", version: 2, sourceRevision: currentRevision, creatorId: userId, snapshotJson: currentSnapshot as Prisma.InputJsonValue, personCount: currentBackup.persons.length, relationshipCount: currentBackup.relationships.length, eventCount: currentBackup.events.length, materialCount: currentSnapshot.materials.length, fileCount: currentSnapshot.mediaObjects.length } });
   await prisma.$transaction(async (tx) => {
     const latestRevision = await getTreeRevision(tx, activeTree.id);
     await consumeConfirmation(tx, { confirmationId, treeId: activeTree.id, userId, kind: "snapshot_restore", input: { snapshotId }, currentRevision: latestRevision });
     const snapshot = await tx.familySnapshot.findUnique({ where: { id: snapshotId } });
     if (!snapshot || snapshot.treeId !== activeTree.id) throw new Error("快照不存在或不属于当前家谱");
-    const document = validateFamilyBackupDocument(snapshot.snapshotJson as unknown);
+    const document = validateMaterialSnapshotDocument(snapshot.snapshotJson as unknown);
+    await assertSnapshotFileObjectsAvailable(document);
+    await tx.sourceMaterial.deleteMany({ where: { treeId: activeTree.id } });
     await tx.relationship.deleteMany({ where: { personA: { createdBy: userId, treeId: activeTree.id } } });
     await tx.personEvent.deleteMany({ where: { person: { createdBy: userId, treeId: activeTree.id } } });
     await tx.person.deleteMany({ where: { createdBy: userId, treeId: activeTree.id } });
@@ -193,7 +211,18 @@ export async function executeSnapshotRestore(confirmationId: string, snapshotId:
     }
     const restorePayloads = buildRestorePayloads(document, personIdMap);
     if (restorePayloads.relationships.length > 0) await tx.relationship.createMany({ data: restorePayloads.relationships });
-    if (restorePayloads.events.length > 0) await tx.personEvent.createMany({ data: restorePayloads.events });
+    const eventIdMap = new Map<string, string>();
+    for (const event of document.events) {
+      const created = await tx.personEvent.create({ data: { personId: personIdMap.get(event.personId)!, type: event.type, title: event.title, dateLabel: event.dateLabel, location: event.location, description: event.description, sortOrder: event.sortOrder, createdAt: new Date(event.createdAt) } });
+      eventIdMap.set(event.id, created.id);
+    }
+    const materialIdMap = new Map<string, string>();
+    for (const material of document.materials) {
+      const created = await tx.sourceMaterial.create({ data: { treeId: activeTree.id, createdBy: userId, title: material.title, category: material.category, source: material.source, eraLabel: material.eraLabel, contributor: material.contributor, description: material.description, createdAt: new Date(material.createdAt), updatedAt: new Date(material.updatedAt) } });
+      materialIdMap.set(material.id, created.id);
+    }
+    if (document.mediaObjects.length > 0) await tx.mediaObject.createMany({ data: document.mediaObjects.map((file) => ({ materialId: materialIdMap.get(file.materialId)!, originalName: file.originalName, mimeType: file.mimeType, byteSize: file.byteSize, contentHash: file.contentHash, storageKey: file.storageKey, displayOrder: file.displayOrder, createdAt: new Date(file.createdAt) })) });
+    if (document.materialLinks.length > 0) await tx.materialLink.createMany({ data: document.materialLinks.map((link) => ({ materialId: materialIdMap.get(link.materialId)!, personId: link.personId ? personIdMap.get(link.personId)! : null, personEventId: link.personEventId ? eventIdMap.get(link.personEventId)! : null })) });
     await createAuditBatch(tx, { treeId: activeTree.id, actorId: userId, action: "snapshot_restore", summary: { snapshotId, reason: snapshot.reason }, entries: [] });
   });
   revalidatePath("/tree");

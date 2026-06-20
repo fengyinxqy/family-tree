@@ -1,9 +1,9 @@
 import { auth } from "@/lib/auth";
-import { exportFamilyBackupForUser } from "@/services/import-export.service";
+import { exportFamilyExchangePackageForUser } from "@/services/exchange-package.service";
 import { getActiveFamilyTreeForUser } from "@/services/family-tree-space.service";
 
 function buildBackupFilename() {
-  return `family-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  return `family-backup-${new Date().toISOString().slice(0, 10)}.zip`;
 }
 
 export async function GET() {
@@ -13,12 +13,12 @@ export async function GET() {
   }
 
   const activeTree = await getActiveFamilyTreeForUser(session.user.id, session.user.name);
-  const backup = await exportFamilyBackupForUser(session.user.id, activeTree.id);
+  const backup = await exportFamilyExchangePackageForUser(session.user.id, activeTree.id);
 
-  return new Response(JSON.stringify(backup, null, 2), {
+  return new Response(backup, {
     status: 200,
     headers: {
-      "Content-Type": "application/json; charset=utf-8",
+      "Content-Type": "application/zip",
       "Content-Disposition": `attachment; filename="${buildBackupFilename()}"`,
       "Cache-Control": "no-store",
     },

@@ -119,7 +119,7 @@ export async function getDeletionBatches(
   const batches = await tx.operationBatch.findMany({
     where: {
       treeId,
-      action: { in: ["person_delete", "relationship_delete"] },
+      action: { in: ["person_delete", "relationship_delete", "material_delete"] },
       status: "complete",
     },
     orderBy: { createdAt: "desc" },

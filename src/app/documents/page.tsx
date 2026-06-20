@@ -1,16 +1,18 @@
-import { EmptyFeaturePanel, WorkspaceRouteShell } from "@/components/workspace-route-shell";
+import { Suspense } from "react";
+import { DocumentsClient } from "@/components/documents-client";
+import { WorkspaceRouteShell } from "@/components/workspace-route-shell";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DocumentsPage() {
   return (
     <WorkspaceRouteShell
       eyebrow="Documents"
-      title="文献空间"
-      description="这页先作为真实产品入口存在，后续会承接族谱扫描件、文献摘录和资料引用。"
+      title="文献与媒体"
+      description="集中保存族谱扫描件、照片、证件与整理材料，并把每条档案关联回人物和事件。"
     >
-      <EmptyFeaturePanel
-        title="文献空间正在准备中"
-        description="这轮先把产品骨架和家谱工作台搭起来，文献能力后续会接入真实资料条目与引用关系。"
-      />
+      <Suspense fallback={<Skeleton className="h-72 w-full" />}>
+        <DocumentsClient />
+      </Suspense>
     </WorkspaceRouteShell>
   );
 }

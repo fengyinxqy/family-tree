@@ -13,7 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { previewImport, executeImport } from "@/services/snapshot.service";
 
 export function ImportExportPanel() {
   const router = useRouter();
@@ -45,7 +44,7 @@ export function ImportExportPanel() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = match?.[1] ?? "family-backup.json";
+      link.download = match?.[1] ?? "family-backup.zip";
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -65,8 +64,11 @@ export function ImportExportPanel() {
     setPreviewResult(null);
 
     try {
-      const payload = JSON.parse(await file.text());
-      const result = await previewImport(payload);
+      const body = new FormData();
+      body.set("file", file);
+      const response = await fetch("/api/import-export/import", { method: "POST", body });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "预览失败");
 
       if (!result.preview.valid) {
         toast.warning("导入预览发现冲突");
@@ -91,8 +93,12 @@ export function ImportExportPanel() {
     setIsImporting(true);
 
     try {
-      const payload = JSON.parse(await pendingFile.text());
-      const result = await executeImport(confirmationId, payload);
+      const body = new FormData();
+      body.set("file", pendingFile);
+      body.set("confirmationId", confirmationId);
+      const response = await fetch("/api/import-export/import", { method: "POST", body });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "导入失败");
       toast.success(
         `${"已恢复 "}${result.personCount} 位人物、${result.relationshipCount} 条关系和${result.eventCount} 条事件`
       );
@@ -118,7 +124,7 @@ export function ImportExportPanel() {
       <input
         ref={inputRef}
         type="file"
-        accept=".json,application/json"
+        accept=".zip,.json,application/zip,application/json"
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];

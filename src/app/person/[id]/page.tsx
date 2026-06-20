@@ -482,6 +482,36 @@ export default async function PersonDetailPage({ params }: PersonDetailPageProps
             ) : null}
 
             <DetailSection
+              icon={BookOpen}
+              title="相关资料"
+              description="直接关联到这位人物的族谱扫描件、照片与文献来源。"
+            >
+              {person.relatedMaterials.length > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {person.relatedMaterials.map((material) => (
+                    <Link
+                      key={material.id}
+                      href={`/documents/${material.id}`}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card/70 px-4 py-3 transition-colors hover:bg-card"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">{material.title}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {material.eraLabel || material.contributor || "未记录年代与提供者"} · {material.fileCount} 个文件
+                        </p>
+                      </div>
+                      <ChevronRight className="shrink-0 text-muted-foreground" />
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-2xl border border-dashed border-border/60 px-4 py-5 text-sm text-muted-foreground">
+                  暂无直接关联资料，可在文献空间中为这位人物添加来源。
+                </p>
+              )}
+            </DetailSection>
+
+            <DetailSection
               icon={Trees}
               title="家族关系"
               description="关系摘要和成员列表统一整理在同一区域，便于从详情页继续维护家族树。"
