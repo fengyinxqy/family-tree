@@ -91,6 +91,8 @@ export const intakeRouteRequestSchema = z.object({
 
 export const intakeApplyRequestSchema = z.object({
   draft: intakeDraftSchema,
+  sourceText: z.string().trim().min(1).max(50_000),
+  conversationRounds: z.number().int().min(1).max(5).optional().default(1),
 });
 
 export const relationshipRouteRequestSchema = z.object({

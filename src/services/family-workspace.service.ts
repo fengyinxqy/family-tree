@@ -19,7 +19,7 @@ export async function getFamilyWorkspaceData(): Promise<FamilyWorkspaceData> {
   const activeTree = await getActiveFamilyTreeForUser(session.user.id, session.user.name);
   const [persons, relationships] = await Promise.all([
     prisma.person.findMany({
-      where: { treeId: activeTree.id, deletedAt: null },
+      where: { treeId: activeTree.id, deletedAt: null, withdrawnAt: null },
       include: {
         events: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
       },

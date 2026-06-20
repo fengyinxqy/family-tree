@@ -159,10 +159,13 @@ export function SettingsClient({ canManageRecovery }: { canManageRecovery: boole
   const actionLabel = (a: string) => ({
     person_create: "新建人物", person_update: "修改人物", person_delete: "人物删除", person_restore: "恢复人物",
     relationship_create: "新建关系", relationship_delete: "关系删除", relationship_restore: "恢复关系",
+    revision_group_create: "修订组创建", revision_group_submit: "提交修订组", revision_group_review: "审校修订组", revision_group_publish: "发布修订组",
+    content_revision_publish: "发布修订", content_withdrawal: "撤回内容",
+    revision_create: "创建修订", revision_submit: "提交修订",
     import: "导入数据", snapshot_restore: "快照恢复",
   }[a] ?? a);
 
-  const entityLabel = (t: string) => ({ person: "人物", relationship: "关系", person_event: "事件", snapshot: "快照" }[t] ?? t);
+  const entityLabel = (t: string) => ({ person: "人物", relationship: "关系", person_event: "事件", snapshot: "快照", content_revision: "修订", revision_group: "修订组", revision_provenance: "来源", review_decision: "审校决定", source_material: "文献资料", media_object: "媒体文件", material_link: "资料关联" }[t] ?? t);
   const entryActionLabel = (a: string) => ({ create: "创建", update: "修改", delete: "删除", restore: "恢复", snapshot_create: "创建快照" }[a] ?? a);
 
   function renderEntryText(entry: AuditEntry): string {

@@ -143,7 +143,7 @@ function DraftCard({
         <CardDescription>{draft.summary}</CardDescription>
         <CardAction>
           <Badge variant={draft.readyToApply ? "default" : "secondary"}>
-            {draft.readyToApply ? "可写入" : "待确认"}
+            {draft.readyToApply ? "可创建修订" : "待确认"}
           </Badge>
         </CardAction>
       </CardHeader>
@@ -199,7 +199,7 @@ function DraftCard({
             ) : (
               <Check data-icon="inline-start" />
             )}
-            确认写入
+            创建待审修订
           </Button>
         </div>
       </CardContent>
@@ -271,6 +271,7 @@ export function AgentPanel({
   const router = useRouter();
   const [chatInput, setChatInput] = useState("");
   const [draft, setDraft] = useState<IntakeDraft | null>(null);
+  const [draftSourceText, setDraftSourceText] = useState("");
   const [relationshipResult, setRelationshipResult] = useState<RelationshipAgentResponse | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([
     {
@@ -374,6 +375,7 @@ export function AgentPanel({
 
     setChatInput("");
     setDraft(null);
+    setDraftSourceText(text);
     setRelationshipResult(null);
     const assistantMessageId = nextMessageId("assistant");
 
@@ -429,25 +431,25 @@ export function AgentPanel({
         const response = await fetch("/api/agent/intake/apply", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ draft }),
+          body: JSON.stringify({ draft, sourceText: draftSourceText, conversationRounds: 1 }),
         });
         const json = await response.json();
         if (!response.ok) {
-          throw new Error(json.error || "草稿写入失败");
+          throw new Error(json.error || "待审修订创建失败");
         }
 
         pushMessage({
           id: `assistant-apply-${Date.now()}`,
           role: "assistant",
-          title: "写入完成",
-          body: "补全草稿已写入当前家谱，我已经为你刷新工作台。",
+          title: "待审修订已创建",
+          body: "AI 建议已保存为待审修订，正式家谱不会在审校发布前发生变化。",
         });
         setDraft(null);
-        router.refresh();
+        router.push(json.kind === "revision" ? `/reviews?revision=${json.revisionId}` : `/reviews?group=${json.groupId}`);
         onDraftApplied?.();
-        toast.success("家谱已更新。");
+        toast.success("待审修订已创建。");
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "草稿写入失败");
+        toast.error(error instanceof Error ? error.message : "待审修订创建失败");
       }
     });
   }
@@ -487,7 +489,7 @@ export function AgentPanel({
 
         <MessageLog
           messages={messages}
-          busyLabel={isSubmitting ? "正在思考…" : isApplying ? "正在写入家谱…" : null}
+          busyLabel={isSubmitting ? "正在思考…" : isApplying ? "正在创建待审修订…" : null}
         />
 
         <Separator />

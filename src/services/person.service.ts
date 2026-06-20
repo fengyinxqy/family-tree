@@ -137,7 +137,7 @@ export async function getPersons() {
   const activeTree = await getActiveFamilyTreeForUser(session.user.id, session.user.name);
   await authorizeFamilyAction(session.user.id, activeTree.id, "family.read.published");
   return prisma.person.findMany({
-    where: { treeId: activeTree.id, deletedAt: null },
+    where: { treeId: activeTree.id, deletedAt: null, withdrawnAt: null },
     include: { events: { orderBy: { sortOrder: "asc" } } },
     orderBy: { createdAt: "asc" },
   });

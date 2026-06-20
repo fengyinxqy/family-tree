@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, GitPullRequest, RefreshCw, RotateCcw } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Check, GitPullRequest, RefreshCw, RotateCcw, Group } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,12 @@ import { Textarea } from "@/components/ui/textarea";
 
 type RevisionStatus = "DRAFT" | "IN_REVIEW" | "CHANGES_REQUESTED" | "APPROVED" | "PUBLISHED";
 
-type RevisionItem = {
+interface ReviewDecision {
+  id: string; decision: string; comment: string | null; overrideReason: string | null; createdAt: string;
+}
+
+interface RevisionItem {
+  kind: "revision";
   id: string;
   contentType: string;
   targetEntityId: string | null;
@@ -23,12 +29,32 @@ type RevisionItem = {
   submittedAt: string | null;
   updatedAt: string;
   author: { id: string; name: string; email: string };
-  reviewDecisions: Array<{ id: string; decision: string; comment: string | null; overrideReason: string | null; createdAt: string }>;
+  reviewDecisions: ReviewDecision[];
   canSubmit: boolean;
   canDerive: boolean;
   canPublish: boolean;
   canReview: boolean;
-};
+}
+
+interface GroupItem {
+  kind: "group";
+  id: string;
+  summary: string;
+  status: RevisionStatus;
+  authorId: string;
+  submittedAt: string | null;
+  updatedAt: string;
+  author: { id: string; name: string; email: string };
+  memberCount: number;
+  members: Array<{ id: string; order: number; tempRef: string; contentType: string; payload: unknown }>;
+  reviewDecisions: ReviewDecision[];
+  provenance?: Array<{ kind: string; safeSourceLabel: string }>;
+  canSubmit: boolean;
+  canPublish: boolean;
+  canReview: boolean;
+}
+
+type WorkspaceItem = RevisionItem | GroupItem;
 
 const STATUS_LABELS: Record<RevisionStatus, string> = {
   DRAFT: "草稿",
@@ -56,8 +82,10 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export function RevisionWorkspace({ canReadReviewQueue }: { canReadReviewQueue: boolean }) {
-  const [items, setItems] = useState<RevisionItem[]>([]);
-  const [queue, setQueue] = useState<RevisionItem[]>([]);
+  const searchParams = useSearchParams();
+  const [revisions, setRevisions] = useState<RevisionItem[]>([]);
+  const [groups, setGroups] = useState<GroupItem[]>([]);
+  const [queue, setQueue] = useState<WorkspaceItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [overrideReason, setOverrideReason] = useState("");
@@ -69,11 +97,25 @@ export function RevisionWorkspace({ canReadReviewQueue }: { canReadReviewQueue: 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const workspace = await requestJson<RevisionItem[]>("/api/revisions");
-      setItems(workspace);
-      setSelectedId((current) => current ?? workspace[0]?.id ?? null);
+      const [revData, groupData] = await Promise.all([
+        requestJson<RevisionItem[]>("/api/revisions"),
+        requestJson<GroupItem[]>("/api/revision-groups"),
+      ]);
+      setRevisions(revData);
+      setGroups(groupData);
+      // Select from URL param if provided
+      const groupParam = searchParams?.get("group");
+      const revisionParam = searchParams?.get("revision");
+      if (groupParam) setSelectedId(groupParam);
+      else if (revisionParam) setSelectedId(revisionParam);
+      else setSelectedId((current) => current ?? groupData[0]?.id ?? revData[0]?.id ?? null);
+
       if (canReadReviewQueue) {
-        setQueue(await requestJson<RevisionItem[]>("/api/revisions/review-queue"));
+        const [revQueue, groupQueue] = await Promise.all([
+          requestJson<RevisionItem[]>("/api/revisions/review-queue"),
+          requestJson<GroupItem[]>("/api/revision-groups/review-queue"),
+        ]);
+        setQueue([...groupQueue, ...revQueue]);
         setQueueAvailable(true);
       } else {
         setQueue([]);
@@ -84,13 +126,31 @@ export function RevisionWorkspace({ canReadReviewQueue }: { canReadReviewQueue: 
     } finally {
       setLoading(false);
     }
-  }, [canReadReviewQueue]);
+  }, [canReadReviewQueue, searchParams]);
 
   useEffect(() => {
     queueMicrotask(() => void load());
   }, [load]);
 
-  const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? queue.find((item) => item.id === selectedId) ?? null, [items, queue, selectedId]);
+  const allItems = useMemo(() => {
+    const map = new Map<string, WorkspaceItem>();
+    for (const item of queue) map.set(item.id, item);
+    for (const item of groups) if (!map.has(item.id)) map.set(item.id, item);
+    for (const item of revisions) if (!map.has(item.id)) map.set(item.id, item);
+    return [...map.values()];
+  }, [revisions, groups, queue]);
+
+  const selected = useMemo(() => allItems.find((item) => item.id === selectedId) ?? null, [allItems, selectedId]);
+
+  function isGroup(item: WorkspaceItem): item is GroupItem {
+    return item.kind === "group";
+  }
+
+  function getItemLabel(item: WorkspaceItem): string {
+    if (isGroup(item)) return item.summary.slice(0, 60);
+    const type = TYPE_LABELS[item.contentType] ?? item.contentType;
+    return type + " v" + item.version;
+  }
 
   async function perform(url: string, body?: object) {
     if (activeRequestRef.current === url) return;
@@ -114,17 +174,26 @@ export function RevisionWorkspace({ canReadReviewQueue }: { canReadReviewQueue: 
     <div className="grid gap-6 xl:grid-cols-[22rem_1fr]">
       <Card>
         <CardHeader>
-          <CardTitle>修订列表</CardTitle>
-          <CardDescription>{queueAvailable ? `我的修订与 ${queue.length} 项待审内容` : "我的修订"}</CardDescription>
+          <CardTitle>审核工作区</CardTitle>
+          <CardDescription>{queueAvailable ? "待审队列 " + queue.length + " 项" : "我的草稿"}</CardDescription>
           <CardAction><Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}><RefreshCw data-icon="inline-start" />刷新</Button></CardAction>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
-          {items.length === 0 && queue.length === 0 ? <p className="text-sm text-muted-foreground">暂无修订。编辑业务内容后，草稿会出现在这里。</p> : null}
-          {[...new Map([...queue, ...items].map((item) => [item.id, item])).values()].map((item) => (
+          {allItems.length === 0 ? <p className="text-sm text-muted-foreground">暂无修订。编辑业务内容后，草稿会出现在这里。</p> : null}
+          {allItems.map((item) => (
             <Button key={item.id} variant={selectedId === item.id ? "secondary" : "ghost"} className="h-auto justify-start" onClick={() => setSelectedId(item.id)}>
               <span className="flex min-w-0 flex-col items-start gap-1 text-left">
-                <span className="truncate">{TYPE_LABELS[item.contentType] ?? item.contentType} · v{item.version}</span>
-                <span className="text-xs text-muted-foreground">{item.author.name} · {STATUS_LABELS[item.status]}</span>
+                <span className="flex items-center gap-1.5 truncate">
+                  {isGroup(item) ? <Group className="size-3.5 shrink-0 text-muted-foreground" /> : null}
+                  <span className="truncate">{getItemLabel(item)}</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  {isGroup(item) ? <span className="text-[10px] text-muted-foreground">修订组</span> : <span>{TYPE_LABELS[item.contentType] ?? item.contentType}</span>}
+                  <span>·</span>
+                  <span>{item.author.name}</span>
+                  <span>·</span>
+                  <Badge variant={item.status === "PUBLISHED" ? "default" : item.status === "IN_REVIEW" ? "secondary" : "outline"} className="text-[10px]">{STATUS_LABELS[item.status]}</Badge>
+                </span>
               </span>
             </Button>
           ))}
@@ -133,17 +202,38 @@ export function RevisionWorkspace({ canReadReviewQueue }: { canReadReviewQueue: 
 
       <Card>
         <CardHeader>
-          <CardTitle>{selected ? `${TYPE_LABELS[selected.contentType] ?? selected.contentType}修订` : "修订详情"}</CardTitle>
-          <CardDescription>{selected ? `作者：${selected.author.name} · 版本 ${selected.version}` : "从左侧选择一项修订。"}</CardDescription>
+          <CardTitle>{selected ? (isGroup(selected) ? "修订组: " + selected.summary.slice(0, 40) : (TYPE_LABELS[selected.contentType] ?? selected.contentType) + " 修订") : "修订详情"}</CardTitle>
+          <CardDescription>{selected ? "作者: " + selected.author.name + (isGroup(selected) ? " · " + selected.memberCount + " 个成员" : " · 版本 " + selected.version) : "从左侧选择一项"}</CardDescription>
           {selected ? <CardAction><Badge>{STATUS_LABELS[selected.status]}</Badge></CardAction> : null}
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           {selected ? (
             <>
-              <Alert>
-                <AlertTitle>候选内容</AlertTitle>
-                <AlertDescription><pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(selected.payload, null, 2)}</pre></AlertDescription>
-              </Alert>
+              {isGroup(selected) && selected.provenance && selected.provenance.length > 0 ? (
+                <Alert>
+                  <AlertTitle>来源</AlertTitle>
+                  <AlertDescription>
+                    {selected.provenance.map((p, i) => <span key={i} className="mr-2"><Badge variant="outline">{p.safeSourceLabel}</Badge></span>)}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+
+              {isGroup(selected) ? (
+                <div className="flex flex-col gap-2">
+                  <h3 className="font-medium">修订组成员 ({selected.memberCount})</h3>
+                  {selected.members.map((member) => (
+                    <Alert key={member.id}>
+                      <AlertTitle>{TYPE_LABELS[member.contentType] ?? member.contentType}</AlertTitle>
+                      <AlertDescription><pre className="max-h-32 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(member.payload, null, 2)}</pre></AlertDescription>
+                    </Alert>
+                  ))}
+                </div>
+              ) : (
+                <Alert>
+                  <AlertTitle>候选内容</AlertTitle>
+                  <AlertDescription><pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(selected.payload, null, 2)}</pre></AlertDescription>
+                </Alert>
+              )}
 
               {selected.reviewDecisions.length > 0 ? (
                 <div className="flex flex-col gap-2">
@@ -152,9 +242,21 @@ export function RevisionWorkspace({ canReadReviewQueue }: { canReadReviewQueue: 
                 </div>
               ) : null}
 
-              {selected.status === "DRAFT" && selected.canSubmit ? <Button onClick={() => void perform(`/api/revisions/${selected.id}/submit`)} disabled={busy}><GitPullRequest data-icon="inline-start" />提交审校</Button> : null}
-              {(selected.status === "CHANGES_REQUESTED" || selected.status === "PUBLISHED") && selected.canDerive ? <Button variant="outline" onClick={() => void perform(`/api/revisions/${selected.id}/derive`)} disabled={busy}><RotateCcw data-icon="inline-start" />派生新草稿</Button> : null}
-              {selected.status === "APPROVED" && selected.canPublish ? <Button onClick={() => void perform(`/api/revisions/${selected.id}/publish`)} disabled={busy}><Check data-icon="inline-start" />发布正式版本</Button> : null}
+              {selected.status === "DRAFT" && selected.canSubmit
+                ? (isGroup(selected)
+                  ? <Button onClick={() => void perform("/api/revision-groups/" + selected.id + "/submit")} disabled={busy}><GitPullRequest data-icon="inline-start" />提交审校</Button>
+                  : <Button onClick={() => void perform("/api/revisions/" + selected.id + "/submit")} disabled={busy}><GitPullRequest data-icon="inline-start" />提交审校</Button>)
+                : null}
+
+              {selected.status === "APPROVED" && selected.canPublish
+                ? (isGroup(selected)
+                  ? <Button onClick={() => void perform("/api/revision-groups/" + selected.id + "/publish")} disabled={busy}><Check data-icon="inline-start" />发布正式版本</Button>
+                  : <Button onClick={() => void perform("/api/revisions/" + selected.id + "/publish")} disabled={busy}><Check data-icon="inline-start" />发布正式版本</Button>)
+                : null}
+
+              {!isGroup(selected) && (selected.status === "CHANGES_REQUESTED" || selected.status === "PUBLISHED") && (selected as RevisionItem).canDerive
+                ? <Button variant="outline" onClick={() => void perform("/api/revisions/" + selected.id + "/derive")} disabled={busy}><RotateCcw data-icon="inline-start" />派生新草稿</Button>
+                : null}
 
               {queueAvailable && selected.status === "IN_REVIEW" && selected.canReview ? (
                 <FieldGroup>
@@ -168,8 +270,8 @@ export function RevisionWorkspace({ canReadReviewQueue }: { canReadReviewQueue: 
                     <FieldDescription>普通审校者不能审校自己的修订。</FieldDescription>
                   </Field>
                   <div className="flex flex-wrap gap-2">
-                    <Button onClick={() => void perform(`/api/revisions/${selected.id}/review`, { decision: "APPROVED", comment, overrideReason })} disabled={busy}><Check data-icon="inline-start" />通过</Button>
-                    <Button variant="outline" onClick={() => void perform(`/api/revisions/${selected.id}/review`, { decision: "CHANGES_REQUESTED", comment, overrideReason })} disabled={busy || !comment.trim()}>退回修改</Button>
+                    <Button onClick={() => void perform((isGroup(selected) ? "/api/revision-groups/" : "/api/revisions/") + selected.id + "/review", { decision: "APPROVED", comment, overrideReason })} disabled={busy}><Check data-icon="inline-start" />通过</Button>
+                    <Button variant="outline" onClick={() => void perform((isGroup(selected) ? "/api/revision-groups/" : "/api/revisions/") + selected.id + "/review", { decision: "CHANGES_REQUESTED", comment, overrideReason })} disabled={busy || !comment.trim()}>退回修改</Button>
                   </div>
                 </FieldGroup>
               ) : null}

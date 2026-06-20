@@ -199,7 +199,7 @@ export async function reviewContentRevision(revisionId: string, input: unknown) 
 export async function getReviewQueue() {
   const { userId, treeId, membership } = await requireRevisionContext("review.read");
   return prisma.contentRevision.findMany({
-    where: { treeId, status: { in: ["IN_REVIEW", "APPROVED"] } },
+    where: { treeId, groupMembership: null, status: { in: ["IN_REVIEW", "APPROVED"] } },
     include: { author: { select: { id: true, name: true, email: true } }, reviewDecisions: { orderBy: { createdAt: "desc" }, take: 1 } },
     orderBy: [{ submittedAt: "asc" }, { createdAt: "asc" }],
   }).then((items) => items.map((item) => ({
@@ -216,7 +216,7 @@ export async function getRevisionWorkspace() {
   const { userId, treeId, membership } = await requireRevisionContext("family.read.workspace");
   const canReview = canPerformFamilyAction(membership.role, "review.read");
   return prisma.contentRevision.findMany({
-    where: canReview ? { treeId } : { treeId, authorId: userId },
+    where: canReview ? { treeId, groupMembership: null } : { treeId, authorId: userId, groupMembership: null },
     include: { author: { select: { id: true, name: true, email: true } }, reviewDecisions: { orderBy: { createdAt: "desc" } } },
     orderBy: { updatedAt: "desc" },
     take: 100,

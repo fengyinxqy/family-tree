@@ -7,20 +7,24 @@ datasource db {
 }
 
 model User {
-  id                        String              @id @default(cuid())
-  email                     String              @unique
+  id                        String               @id @default(cuid())
+  email                     String               @unique
   name                      String
-  passwordHash              String              @map("password_hash")
-  createdAt                 DateTime            @default(now()) @map("created_at")
+  passwordHash              String               @map("password_hash")
+  createdAt                 DateTime             @default(now()) @map("created_at")
   persons                   Person[]
   familyTrees               FamilyTree[]
   sourceMaterials           SourceMaterial[]
   familyMemberships         FamilyMembership[]
-  sentFamilyInvitations     FamilyInvitation[]  @relation("FamilyInvitationInviter")
-  acceptedFamilyInvitations FamilyInvitation[]  @relation("FamilyInvitationAcceptor")
-  authoredContentRevisions  ContentRevision[]   @relation("ContentRevisionAuthor")
-  publishedContentRevisions ContentRevision[]   @relation("ContentRevisionPublisher")
+  sentFamilyInvitations     FamilyInvitation[]   @relation("FamilyInvitationInviter")
+  acceptedFamilyInvitations FamilyInvitation[]   @relation("FamilyInvitationAcceptor")
+  authoredContentRevisions  ContentRevision[]    @relation("ContentRevisionAuthor")
+  publishedContentRevisions ContentRevision[]    @relation("ContentRevisionPublisher")
+  withdrawnContentRevisions ContentRevision[]    @relation("ContentRevisionWithdrawer")
+  authoredRevisionGroups    RevisionGroup[]      @relation("RevisionGroupAuthor")
+  publishedRevisionGroups   RevisionGroup[]      @relation("RevisionGroupPublisher")
   reviewDecisions           ReviewDecision[]
+  provenanceEntries         RevisionProvenance[]
   stagedMediaUploads        StagedMediaUpload[]
 
   @@map("users")
@@ -43,6 +47,8 @@ model FamilyTree {
   memberships        FamilyMembership[]
   invitations        FamilyInvitation[]
   contentRevisions   ContentRevision[]
+  revisionGroups     RevisionGroup[]
+  provenanceEntries  RevisionProvenance[]
   stagedMediaUploads StagedMediaUpload[]
 
   @@index([ownerId, createdAt], map: "idx_family_trees_owner_created")
@@ -130,32 +136,46 @@ enum ReviewDecisionType {
   CHANGES_REQUESTED
 }
 
+enum RevisionProvenanceKind {
+  MATERIAL
+  MEDIA_OBJECT
+  INTAKE_SNAPSHOT
+  MANUAL_KNOWLEDGE
+}
+
 model ContentRevision {
-  id                  String                @id @default(cuid())
-  treeId              String                @map("tree_id")
-  tree                FamilyTree            @relation(fields: [treeId], references: [id], onDelete: Cascade)
-  contentType         RevisionContentType   @map("content_type")
-  targetEntityId      String?               @map("target_entity_id")
-  authorId            String                @map("author_id")
-  author              User                  @relation("ContentRevisionAuthor", fields: [authorId], references: [id], onDelete: Restrict)
-  parentRevisionId    String?               @map("parent_revision_id")
-  parentRevision      ContentRevision?      @relation("RevisionHistory", fields: [parentRevisionId], references: [id], onDelete: SetNull)
-  derivedRevisions    ContentRevision[]     @relation("RevisionHistory")
-  baseFamilyRevision  Int                   @map("base_family_revision")
-  baseTargetUpdatedAt DateTime?             @map("base_target_updated_at")
-  schemaVersion       Int                   @default(1) @map("schema_version")
-  version             Int                   @default(1)
-  status              ContentRevisionStatus @default(DRAFT)
-  payload             Json
-  submittedAt         DateTime?             @map("submitted_at")
-  approvedAt          DateTime?             @map("approved_at")
-  publishedAt         DateTime?             @map("published_at")
-  publishedBy         String?               @map("published_by")
-  publisher           User?                 @relation("ContentRevisionPublisher", fields: [publishedBy], references: [id], onDelete: SetNull)
-  publishOperationId  String?               @map("publish_operation_id")
-  createdAt           DateTime              @default(now()) @map("created_at")
-  updatedAt           DateTime              @updatedAt @map("updated_at")
-  reviewDecisions     ReviewDecision[]
+  id                    String                @id @default(cuid())
+  treeId                String                @map("tree_id")
+  tree                  FamilyTree            @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  contentType           RevisionContentType   @map("content_type")
+  targetEntityId        String?               @map("target_entity_id")
+  authorId              String                @map("author_id")
+  author                User                  @relation("ContentRevisionAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  parentRevisionId      String?               @map("parent_revision_id")
+  parentRevision        ContentRevision?      @relation("RevisionHistory", fields: [parentRevisionId], references: [id], onDelete: SetNull)
+  derivedRevisions      ContentRevision[]     @relation("RevisionHistory")
+  baseFamilyRevision    Int                   @map("base_family_revision")
+  baseTargetUpdatedAt   DateTime?             @map("base_target_updated_at")
+  schemaVersion         Int                   @default(1) @map("schema_version")
+  version               Int                   @default(1)
+  status                ContentRevisionStatus @default(DRAFT)
+  payload               Json
+  submittedAt           DateTime?             @map("submitted_at")
+  approvedAt            DateTime?             @map("approved_at")
+  publishedAt           DateTime?             @map("published_at")
+  publishedBy           String?               @map("published_by")
+  publisher             User?                 @relation("ContentRevisionPublisher", fields: [publishedBy], references: [id], onDelete: SetNull)
+  publishOperationId    String?               @map("publish_operation_id")
+  withdrawnAt           DateTime?             @map("withdrawn_at")
+  withdrawnBy           String?               @map("withdrawn_by")
+  withdrawer            User?                 @relation("ContentRevisionWithdrawer", fields: [withdrawnBy], references: [id], onDelete: SetNull)
+  withdrawalReason      String?               @map("withdrawal_reason")
+  withdrawalOperationId String?               @map("withdrawal_operation_id")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
+  reviewDecisions       ReviewDecision[]
+  groupMembership       RevisionGroupMember?
+  provenanceEntries     RevisionProvenance[]
 
   @@index([treeId, status, submittedAt], map: "idx_content_revisions_review_queue")
   @@index([treeId, contentType, targetEntityId, createdAt], map: "idx_content_revisions_target_history")
@@ -164,10 +184,59 @@ model ContentRevision {
   @@map("content_revisions")
 }
 
+model RevisionGroup {
+  id                 String                @id @default(cuid())
+  treeId             String                @map("tree_id")
+  tree               FamilyTree            @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  authorId           String                @map("author_id")
+  author             User                  @relation("RevisionGroupAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  schemaVersion      Int                   @default(1) @map("schema_version")
+  summary            String
+  sourceSnapshot     Json                  @map("source_snapshot")
+  sourceTextHash     String                @map("source_text_hash")
+  safeSourceExcerpt  String                @map("safe_source_excerpt")
+  baseFamilyRevision Int                   @map("base_family_revision")
+  status             ContentRevisionStatus @default(DRAFT)
+  submittedAt        DateTime?             @map("submitted_at")
+  approvedAt         DateTime?             @map("approved_at")
+  publishedAt        DateTime?             @map("published_at")
+  publishedBy        String?               @map("published_by")
+  publisher          User?                 @relation("RevisionGroupPublisher", fields: [publishedBy], references: [id], onDelete: SetNull)
+  publishOperationId String?               @map("publish_operation_id")
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+  members            RevisionGroupMember[]
+  reviewDecisions    ReviewDecision[]
+  provenanceEntries  RevisionProvenance[]
+
+  @@index([treeId, status, submittedAt], map: "idx_revision_groups_review_queue")
+  @@index([authorId, status, updatedAt], map: "idx_revision_groups_author_status")
+  @@index([treeId, createdAt], map: "idx_revision_groups_tree_created")
+  @@map("revision_groups")
+}
+
+model RevisionGroupMember {
+  id         String          @id @default(cuid())
+  groupId    String          @map("group_id")
+  group      RevisionGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  revisionId String          @unique @map("revision_id")
+  revision   ContentRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  order      Int
+  tempRef    String          @map("temp_ref")
+  createdAt  DateTime        @default(now()) @map("created_at")
+
+  @@unique([groupId, order], map: "uq_revision_group_members_order")
+  @@unique([groupId, tempRef], map: "uq_revision_group_members_temp_ref")
+  @@index([groupId, createdAt], map: "idx_revision_group_members_group_created")
+  @@map("revision_group_members")
+}
+
 model ReviewDecision {
   id             String             @id @default(cuid())
-  revisionId     String             @map("revision_id")
-  revision       ContentRevision    @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  revisionId     String?            @map("revision_id")
+  revision       ContentRevision?   @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  groupId        String?            @map("group_id")
+  group          RevisionGroup?     @relation(fields: [groupId], references: [id], onDelete: Cascade)
   reviewerId     String             @map("reviewer_id")
   reviewer       User               @relation(fields: [reviewerId], references: [id], onDelete: Restrict)
   decision       ReviewDecisionType
@@ -176,8 +245,39 @@ model ReviewDecision {
   createdAt      DateTime           @default(now()) @map("created_at")
 
   @@index([revisionId, createdAt], map: "idx_review_decisions_revision_created")
+  @@index([groupId, createdAt], map: "idx_review_decisions_group_created")
   @@index([reviewerId, createdAt], map: "idx_review_decisions_reviewer_created")
   @@map("review_decisions")
+}
+
+model RevisionProvenance {
+  id               String                 @id @default(cuid())
+  treeId           String                 @map("tree_id")
+  tree             FamilyTree             @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  revisionId       String?                @map("revision_id")
+  revision         ContentRevision?       @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  groupId          String?                @map("group_id")
+  group            RevisionGroup?         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  kind             RevisionProvenanceKind
+  sourceMaterialId String?                @map("source_material_id")
+  sourceMaterial   SourceMaterial?        @relation(fields: [sourceMaterialId], references: [id], onDelete: SetNull)
+  mediaObjectId    String?                @map("media_object_id")
+  mediaObject      MediaObject?           @relation(fields: [mediaObjectId], references: [id], onDelete: SetNull)
+  locator          String?
+  sourceTextHash   String?                @map("source_text_hash")
+  safeExcerpt      String?                @map("safe_excerpt")
+  manualRationale  String?                @map("manual_rationale")
+  safeSourceLabel  String                 @map("safe_source_label")
+  createdBy        String                 @map("created_by")
+  creator          User                   @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  createdAt        DateTime               @default(now()) @map("created_at")
+
+  @@index([treeId, createdAt], map: "idx_revision_provenance_tree_created")
+  @@index([revisionId, createdAt], map: "idx_revision_provenance_revision_created")
+  @@index([groupId, createdAt], map: "idx_revision_provenance_group_created")
+  @@index([sourceMaterialId], map: "idx_revision_provenance_material")
+  @@index([mediaObjectId], map: "idx_revision_provenance_media")
+  @@map("revision_provenance")
 }
 
 model StagedMediaUpload {
@@ -201,52 +301,62 @@ model StagedMediaUpload {
 }
 
 model Person {
-  id                  String         @id @default(cuid())
-  name                String
-  gender              String
-  birthDate           String?        @map("birth_date")
-  deathDate           String?        @map("death_date")
-  bio                 String?
-  aliases             String[]       @default([])
-  generationNumber    Int            @default(1) @map("generation_number")
-  generationLabel     String?        @map("generation_label")
-  nativePlace         String?        @map("native_place")
-  notes               String?
-  posX                Float?         @map("pos_x")
-  posY                Float?         @map("pos_y")
-  createdAt           DateTime       @default(now()) @map("created_at")
-  updatedAt           DateTime       @updatedAt @map("updated_at")
-  createdBy           String         @map("created_by")
-  creator             User           @relation(fields: [createdBy], references: [id])
-  treeId              String         @map("tree_id")
-  tree                FamilyTree     @relation(fields: [treeId], references: [id], onDelete: Cascade)
-  relationsA          Relationship[] @relation("PersonA")
-  relationsB          Relationship[] @relation("PersonB")
-  events              PersonEvent[]
-  deletedAt           DateTime?      @map("deleted_at")
-  deletedBy           String?        @map("deleted_by")
-  deletionOperationId String?        @map("deletion_operation_id")
-  materialLinks       MaterialLink[]
+  id                    String         @id @default(cuid())
+  name                  String
+  gender                String
+  birthDate             String?        @map("birth_date")
+  deathDate             String?        @map("death_date")
+  bio                   String?
+  aliases               String[]       @default([])
+  generationNumber      Int            @default(1) @map("generation_number")
+  generationLabel       String?        @map("generation_label")
+  nativePlace           String?        @map("native_place")
+  notes                 String?
+  posX                  Float?         @map("pos_x")
+  posY                  Float?         @map("pos_y")
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+  createdBy             String         @map("created_by")
+  creator               User           @relation(fields: [createdBy], references: [id])
+  treeId                String         @map("tree_id")
+  tree                  FamilyTree     @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  relationsA            Relationship[] @relation("PersonA")
+  relationsB            Relationship[] @relation("PersonB")
+  events                PersonEvent[]
+  deletedAt             DateTime?      @map("deleted_at")
+  deletedBy             String?        @map("deleted_by")
+  deletionOperationId   String?        @map("deletion_operation_id")
+  withdrawnAt           DateTime?      @map("withdrawn_at")
+  withdrawnBy           String?        @map("withdrawn_by")
+  withdrawalReason      String?        @map("withdrawal_reason")
+  withdrawalOperationId String?        @map("withdrawal_operation_id")
+  materialLinks         MaterialLink[]
 
   @@index([createdBy, treeId], map: "idx_persons_created_by_tree")
   @@index([treeId, deletedAt], map: "idx_persons_tree_deleted")
+  @@index([treeId, withdrawnAt], map: "idx_persons_tree_withdrawn")
   @@map("persons")
 }
 
 model PersonEvent {
-  id            String         @id @default(cuid())
-  personId      String         @map("person_id")
-  type          String
-  title         String?
-  dateLabel     String?        @map("date_label")
-  location      String?
-  description   String?
-  sortOrder     Int            @default(0) @map("sort_order")
-  createdAt     DateTime       @default(now()) @map("created_at")
-  person        Person         @relation(fields: [personId], references: [id], onDelete: Cascade)
-  materialLinks MaterialLink[]
+  id                    String         @id @default(cuid())
+  personId              String         @map("person_id")
+  type                  String
+  title                 String?
+  dateLabel             String?        @map("date_label")
+  location              String?
+  description           String?
+  sortOrder             Int            @default(0) @map("sort_order")
+  createdAt             DateTime       @default(now()) @map("created_at")
+  person                Person         @relation(fields: [personId], references: [id], onDelete: Cascade)
+  materialLinks         MaterialLink[]
+  withdrawnAt           DateTime?      @map("withdrawn_at")
+  withdrawnBy           String?        @map("withdrawn_by")
+  withdrawalReason      String?        @map("withdrawal_reason")
+  withdrawalOperationId String?        @map("withdrawal_operation_id")
 
   @@index([personId, sortOrder], map: "idx_person_events_person_sort")
+  @@index([personId, withdrawnAt], map: "idx_person_events_person_withdrawn")
   @@map("person_events")
 }
 
@@ -260,86 +370,108 @@ enum MaterialCategory {
 }
 
 model SourceMaterial {
-  id                  String           @id @default(cuid())
-  treeId              String           @map("tree_id")
-  tree                FamilyTree       @relation(fields: [treeId], references: [id], onDelete: Cascade)
-  title               String
-  category            MaterialCategory
-  source              String?
-  eraLabel            String?          @map("era_label")
-  contributor         String?
-  description         String?
-  createdBy           String           @map("created_by")
-  creator             User             @relation(fields: [createdBy], references: [id])
-  createdAt           DateTime         @default(now()) @map("created_at")
-  updatedAt           DateTime         @updatedAt @map("updated_at")
-  deletedAt           DateTime?        @map("deleted_at")
-  deletedBy           String?          @map("deleted_by")
-  deletionOperationId String?          @map("deletion_operation_id")
-  files               MediaObject[]
-  links               MaterialLink[]
+  id                    String               @id @default(cuid())
+  treeId                String               @map("tree_id")
+  tree                  FamilyTree           @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  title                 String
+  category              MaterialCategory
+  source                String?
+  eraLabel              String?              @map("era_label")
+  contributor           String?
+  description           String?
+  createdBy             String               @map("created_by")
+  creator               User                 @relation(fields: [createdBy], references: [id])
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt @map("updated_at")
+  deletedAt             DateTime?            @map("deleted_at")
+  deletedBy             String?              @map("deleted_by")
+  deletionOperationId   String?              @map("deletion_operation_id")
+  withdrawnAt           DateTime?            @map("withdrawn_at")
+  withdrawnBy           String?              @map("withdrawn_by")
+  withdrawalReason      String?              @map("withdrawal_reason")
+  withdrawalOperationId String?              @map("withdrawal_operation_id")
+  files                 MediaObject[]
+  links                 MaterialLink[]
+  provenanceEntries     RevisionProvenance[]
 
   @@index([treeId, deletedAt, createdAt], map: "idx_source_materials_tree_active_created")
   @@index([createdBy, treeId], map: "idx_source_materials_creator_tree")
+  @@index([treeId, withdrawnAt], map: "idx_source_materials_tree_withdrawn")
   @@map("source_materials")
 }
 
 model MediaObject {
-  id                  String         @id @default(cuid())
-  materialId          String         @map("material_id")
-  material            SourceMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
-  originalName        String         @map("original_name")
-  mimeType            String         @map("mime_type")
-  byteSize            Int            @map("byte_size")
-  contentHash         String         @map("content_hash")
-  storageKey          String         @unique @map("storage_key")
-  displayOrder        Int            @default(0) @map("display_order")
-  createdAt           DateTime       @default(now()) @map("created_at")
-  deletedAt           DateTime?      @map("deleted_at")
-  deletedBy           String?        @map("deleted_by")
-  deletionOperationId String?        @map("deletion_operation_id")
+  id                    String               @id @default(cuid())
+  materialId            String               @map("material_id")
+  material              SourceMaterial       @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  originalName          String               @map("original_name")
+  mimeType              String               @map("mime_type")
+  byteSize              Int                  @map("byte_size")
+  contentHash           String               @map("content_hash")
+  storageKey            String               @unique @map("storage_key")
+  displayOrder          Int                  @default(0) @map("display_order")
+  createdAt             DateTime             @default(now()) @map("created_at")
+  deletedAt             DateTime?            @map("deleted_at")
+  deletedBy             String?              @map("deleted_by")
+  deletionOperationId   String?              @map("deletion_operation_id")
+  withdrawnAt           DateTime?            @map("withdrawn_at")
+  withdrawnBy           String?              @map("withdrawn_by")
+  withdrawalReason      String?              @map("withdrawal_reason")
+  withdrawalOperationId String?              @map("withdrawal_operation_id")
+  provenanceEntries     RevisionProvenance[]
 
   @@index([materialId, deletedAt, displayOrder], map: "idx_media_objects_material_active_order")
   @@index([contentHash], map: "idx_media_objects_hash")
+  @@index([materialId, withdrawnAt], map: "idx_media_objects_material_withdrawn")
   @@map("media_objects")
 }
 
 model MaterialLink {
-  id                  String         @id @default(cuid())
-  materialId          String         @map("material_id")
-  material            SourceMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
-  personId            String?        @map("person_id")
-  person              Person?        @relation(fields: [personId], references: [id], onDelete: Cascade)
-  personEventId       String?        @map("person_event_id")
-  personEvent         PersonEvent?   @relation(fields: [personEventId], references: [id], onDelete: Cascade)
-  createdAt           DateTime       @default(now()) @map("created_at")
-  deletedAt           DateTime?      @map("deleted_at")
-  deletedBy           String?        @map("deleted_by")
-  deletionOperationId String?        @map("deletion_operation_id")
+  id                    String         @id @default(cuid())
+  materialId            String         @map("material_id")
+  material              SourceMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  personId              String?        @map("person_id")
+  person                Person?        @relation(fields: [personId], references: [id], onDelete: Cascade)
+  personEventId         String?        @map("person_event_id")
+  personEvent           PersonEvent?   @relation(fields: [personEventId], references: [id], onDelete: Cascade)
+  createdAt             DateTime       @default(now()) @map("created_at")
+  deletedAt             DateTime?      @map("deleted_at")
+  deletedBy             String?        @map("deleted_by")
+  deletionOperationId   String?        @map("deletion_operation_id")
+  withdrawnAt           DateTime?      @map("withdrawn_at")
+  withdrawnBy           String?        @map("withdrawn_by")
+  withdrawalReason      String?        @map("withdrawal_reason")
+  withdrawalOperationId String?        @map("withdrawal_operation_id")
 
   @@unique([materialId, personId], map: "uq_material_links_person")
   @@unique([materialId, personEventId], map: "uq_material_links_event")
   @@index([personId, deletedAt], map: "idx_material_links_person_active")
   @@index([personEventId, deletedAt], map: "idx_material_links_event_active")
   @@index([materialId, deletedAt], map: "idx_material_links_material_active")
+  @@index([materialId, withdrawnAt], map: "idx_material_links_material_withdrawn")
   @@map("material_links")
 }
 
 model Relationship {
-  id                  String    @id @default(cuid())
-  type                String
-  personAId           String    @map("person_a_id")
-  personBId           String    @map("person_b_id")
-  label               String?   @map("label")
-  sortOrder           Int       @default(0) @map("sort_order")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  personA             Person    @relation("PersonA", fields: [personAId], references: [id], onDelete: Cascade)
-  personB             Person    @relation("PersonB", fields: [personBId], references: [id], onDelete: Cascade)
-  deletedAt           DateTime? @map("deleted_at")
-  deletedBy           String?   @map("deleted_by")
-  deletionOperationId String?   @map("deletion_operation_id")
+  id                    String    @id @default(cuid())
+  type                  String
+  personAId             String    @map("person_a_id")
+  personBId             String    @map("person_b_id")
+  label                 String?   @map("label")
+  sortOrder             Int       @default(0) @map("sort_order")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  personA               Person    @relation("PersonA", fields: [personAId], references: [id], onDelete: Cascade)
+  personB               Person    @relation("PersonB", fields: [personBId], references: [id], onDelete: Cascade)
+  deletedAt             DateTime? @map("deleted_at")
+  deletedBy             String?   @map("deleted_by")
+  deletionOperationId   String?   @map("deletion_operation_id")
+  withdrawnAt           DateTime? @map("withdrawn_at")
+  withdrawnBy           String?   @map("withdrawn_by")
+  withdrawalReason      String?   @map("withdrawal_reason")
+  withdrawalOperationId String?   @map("withdrawal_operation_id")
 
   @@index([personAId, personBId, deletedAt], map: "idx_relationships_endpoints_deleted")
+  @@index([personAId, personBId, withdrawnAt], map: "idx_relationships_endpoints_withdrawn")
   @@map("relationships")
 }
 

@@ -58,7 +58,7 @@
 ## 8. Existing Write-Path Migration
 
 - [x] 8.1 Route person and event create/edit UI and APIs through draft creation and submission instead of direct formal-table mutation.
-- [ ] 8.2 Route relationship create/edit UI, agent relationship proposals, and intake apply operations through revision submission.
+- [ ] 8.2 Route relationship create/edit UI, agent relationship proposals, and intake apply operations through revision submission. *(AI proposal/intake ownership delegated to `complete-collaboration-publishing-governance`.)*
 - [x] 8.3 Route material metadata and link changes through revisions while keeping private file-byte staging authorized and non-public.
 - [ ] 8.4 Route import execution through a reviewable batch revision or equivalent immutable revision group before formal publication.
 - [ ] 8.5 Verify ordinary tree, person, timeline, relationship inference, material, download, snapshot, and export reads exclude all unpublished revision data.
@@ -66,10 +66,10 @@
 
 ## 9. Audit and Publication Visibility
 
-- [ ] 9.1 Extend operation action types and audit summaries for invitations, membership changes, ownership transfer, revision transitions, publishing, and withdrawal without recording secrets or unnecessary payloads.
-- [ ] 9.2 Update operation history presentation to show collaboration actor, action, affected member or revision, result, and status to the OWNER.
-- [ ] 9.3 Implement audited publication withdrawal or visibility control that preserves published revision history and member-visible formal data.
-- [ ] 9.4 Add audit tests for append-only enforcement, secret redaction, transaction rollback, and complete actor attribution.
+- [ ] 9.1 Extend operation action types and audit summaries for invitations, membership changes, ownership transfer, revision transitions, publishing, and withdrawal without recording secrets or unnecessary payloads. *(Owned by `complete-collaboration-publishing-governance`.)*
+- [ ] 9.2 Update operation history presentation to show collaboration actor, action, affected member or revision, result, and status to the OWNER. *(Owned by `complete-collaboration-publishing-governance`.)*
+- [ ] 9.3 Implement audited publication withdrawal or visibility control that preserves published revision history and member-visible formal data. *(Owned by `complete-collaboration-publishing-governance`.)*
+- [ ] 9.4 Add audit tests for append-only enforcement, secret redaction, transaction rollback, and complete actor attribution. *(Owned by `complete-collaboration-publishing-governance`.)*
 
 ## 10. Validation and Release
 

@@ -16,7 +16,7 @@ export type ConfirmationKind =
   | "snapshot_restore"
   | "person_restore"
   | "relationship_restore"
-  | "material_delete";
+  | "material_delete" | "content_withdrawal";
 
 export interface CreateConfirmationParams {
   treeId: string;

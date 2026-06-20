@@ -7,7 +7,7 @@ type TxClient = Omit<
 >;
 
 interface AuditEntryData {
-  entityType: "person" | "relationship" | "person_event" | "snapshot" | "source_material" | "media_object" | "material_link" | "family_invitation" | "family_membership" | "family_tree" | "content_revision" | "review_decision";
+  entityType: "person" | "relationship" | "person_event" | "snapshot" | "source_material" | "media_object" | "material_link" | "family_invitation" | "family_membership" | "family_tree" | "content_revision" | "revision_group" | "revision_provenance" | "review_decision";
   entityId: string;
   action: "create" | "update" | "delete" | "restore" | "snapshot_create" | "invite" | "accept" | "revoke" | "role_change" | "suspend" | "reactivate" | "remove" | "ownership_transfer" | "submit" | "review" | "publish" | "withdraw";
   beforeJson?: Prisma.InputJsonValue | null;

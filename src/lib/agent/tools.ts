@@ -2,7 +2,6 @@ import { prisma } from "@/lib/prisma";
 import { authorizeFamilyAction } from "@/services/family-authorization.service";
 import type { IntakeDraft, IntakeExtraction, ExistingPersonContext } from "./types";
 import { intakeDraftSchema } from "./schemas";
-import { syncGenerationNumbersForComponent } from "@/services/relationship.service";
 
 export async function getUserGenealogyContext(userId: string, treeId: string) {
   await authorizeFamilyAction(userId, treeId, "family.read.workspace");
@@ -599,89 +598,3 @@ export function mergeDraftWithClarification(
   return intakeDraftSchema.parse(mergedDraft);
 }
 
-export async function applyIntakeDraft(userId: string, treeId: string, draftInput: IntakeDraft) {
-  await authorizeFamilyAction(userId, treeId, "content.edit.direct");
-  const draft = intakeDraftSchema.parse(draftInput);
-  const refToPersonId = new Map<string, string>();
-
-  const created = await prisma.$transaction(async (tx) => {
-    for (const person of draft.persons) {
-      if (person.action === "reuse" && person.existingPersonId) {
-        const existingPerson = await tx.person.findUnique({
-          where: { id: person.existingPersonId },
-        });
-
-        if (!existingPerson || existingPerson.treeId !== treeId || existingPerson.deletedAt) {
-          throw new Error(`Person ${person.name} cannot be reused by this user.`);
-        }
-
-        refToPersonId.set(person.ref, person.existingPersonId);
-        continue;
-      }
-
-      if (person.gender === "unknown") {
-        throw new Error(`Person ${person.name} still has unknown gender and cannot be applied.`);
-      }
-
-      const createdPerson = await tx.person.create({
-        data: {
-          name: person.name,
-          gender: person.gender,
-          birthDate: person.birthDate,
-          deathDate: person.deathDate,
-          bio: person.bio,
-          createdBy: userId,
-          treeId,
-        },
-      });
-
-      refToPersonId.set(person.ref, createdPerson.id);
-    }
-
-    const createdRelationships = [];
-
-    for (const relationship of draft.relationships) {
-      if (relationship.action !== "create") {
-        continue;
-      }
-
-      const personAId = refToPersonId.get(relationship.personARef);
-      const personBId = refToPersonId.get(relationship.personBRef);
-
-      if (!personAId || !personBId) {
-        continue;
-      }
-
-      const createdRelationship = await tx.relationship.create({
-        data: {
-          type: relationship.type,
-          personAId,
-          personBId,
-          label: relationship.label,
-        },
-      });
-
-      createdRelationships.push(createdRelationship);
-    }
-
-    // Sync generation numbers for each connected component
-    const parentRefs = new Set(
-      draft.relationships
-        .filter((r) => r.action === "create" && r.type === "child")
-        .map((r) => r.personARef),
-    );
-    for (const parentRef of parentRefs) {
-      const parentId = refToPersonId.get(parentRef);
-      if (parentId) {
-        await syncGenerationNumbersForComponent(tx, userId, treeId, parentId, 1);
-      }
-    }
-
-    return {
-      personIdsByRef: Object.fromEntries(refToPersonId.entries()),
-      createdRelationships,
-    };
-  });
-
-  return created;
-}

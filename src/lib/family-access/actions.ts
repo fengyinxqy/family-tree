@@ -1,4 +1,4 @@
-export const FAMILY_ROLES = ["OWNER", "ADMIN", "EDITOR", "REVIEWER", "VIEWER"] as const;
+﻿export const FAMILY_ROLES = ["OWNER", "ADMIN", "EDITOR", "REVIEWER", "VIEWER"] as const;
 
 export type FamilyRole = (typeof FAMILY_ROLES)[number];
 
@@ -9,6 +9,7 @@ export const FAMILY_ACTIONS = [
   "family.delete",
   "content.edit.direct",
   "content.delete",
+  "content.withdraw",
   "file.manage",
   "export.read",
   "import.prepare",
@@ -35,6 +36,7 @@ const ADMIN_ACTIONS = new Set<FamilyAction>([
   "family.update",
   "content.edit.direct",
   "content.delete",
+  "content.withdraw",
   "file.manage",
   "export.read",
   "import.prepare",
@@ -95,4 +97,3 @@ export function getFamilyActionsForRole(role: FamilyRole): readonly FamilyAction
 export function isOwnerOnlyAction(action: FamilyAction): boolean {
   return OWNER_ONLY_ACTIONS.has(action);
 }
-
