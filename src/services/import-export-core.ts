@@ -7,6 +7,7 @@ import {
   type BackupRelationship,
   type BackupEvent,
 } from "@/lib/import-export/backup-format";
+import { activePersonInTree, activeRelationshipInTree } from "@/lib/data-safety";
 
 type PersonRecord = {
   id: string;
@@ -103,19 +104,19 @@ type TransactionClient = {
 type PrismaLike = {
   person: {
     findMany(args: {
-      where: { createdBy: string; treeId: string };
+      where: { createdBy: string; treeId: string; deletedAt: null };
       orderBy: Array<{ createdAt: "asc" } | { id: "asc" }>;
     }): Promise<PersonRecord[]>;
   };
   relationship: {
     findMany(args: {
-      where: { personA: { createdBy: string; treeId: string } };
+      where: { personA: { createdBy: string; treeId: string; deletedAt: null }; deletedAt: null };
       orderBy: Array<{ sortOrder: "asc" } | { createdAt: "asc" } | { id: "asc" }>;
     }): Promise<RelationshipRecord[]>;
   };
   personEvent: {
     findMany(args: {
-      where: { person: { createdBy: string; treeId: string } };
+      where: { person: { createdBy: string; treeId: string; deletedAt: null } };
       orderBy: Array<
         { personId: "asc" } | { sortOrder: "asc" } | { createdAt: "asc" } | { id: "asc" }
       >;
@@ -129,17 +130,18 @@ export function createImportExportService(deps: {
   revalidatePath: (path: string) => void;
 }) {
   async function exportFamilyBackupForUser(userId: string, treeId: string): Promise<FamilyBackupDocument> {
+    // 仅导出活跃业务记录，排除软删除、审计、确认和快照数据
     const [persons, relationships, events] = await Promise.all([
       deps.prisma.person.findMany({
-        where: { createdBy: userId, treeId },
+        where: { createdBy: userId, treeId, deletedAt: null },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       }),
       deps.prisma.relationship.findMany({
-        where: { personA: { createdBy: userId, treeId } },
+        where: { personA: { createdBy: userId, treeId, deletedAt: null }, deletedAt: null },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       }),
       deps.prisma.personEvent.findMany({
-        where: { person: { createdBy: userId, treeId } },
+        where: { person: { createdBy: userId, treeId, deletedAt: null } },
         orderBy: [{ personId: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       }),
     ]);
@@ -188,6 +190,7 @@ export function createImportExportService(deps: {
     const document = validateFamilyBackupDocument(input);
 
     const summary = await deps.prisma.$transaction(async (tx) => {
+      // 清空活跃数据（导入为原子替换操作）
       await tx.relationship.deleteMany({
         where: { personA: { createdBy: userId, treeId } },
       });

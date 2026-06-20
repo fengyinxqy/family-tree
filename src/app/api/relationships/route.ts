@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { createRelationship, deleteRelationship } from "@/services/relationship.service";
+import { createRelationship } from "@/services/relationship.service";
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -30,21 +30,10 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "未登录" }, { status: 401 });
-  }
-
-  const { id } = await request.json();
-
-  try {
-    await deleteRelationship(id);
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "删除关系失败";
-    const status = message === "无权操作" ? 403 : message === "未登录" ? 401 : 404;
-
-    return NextResponse.json({ error: message }, { status });
-  }
+// DELETE handler: uses the new preview-confirm flow
+export async function DELETE(_request: Request) {
+  return Response.json({
+    error: "请使用预览-确认流程删除关系（previewRelationshipDeletion + deleteRelationship）",
+    deprecated: true
+  }, { status: 410 });
 }

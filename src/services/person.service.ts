@@ -7,6 +7,16 @@ import { revalidatePath } from "next/cache";
 import { getActiveFamilyTreeForUser } from "@/services/family-tree-space.service";
 import type { PersonEventData } from "@/types";
 
+
+import {
+  activePersonInTree,
+  createAuditBatch,
+  createConfirmation,
+  consumeConfirmation,
+  getTreeRevision,
+  getDeletionBatches,
+} from "@/lib/data-safety";
+import { validateRelationshipCandidate, type RelationshipCandidate } from "@/lib/integrity";
 export interface PersonEventInput {
   type: "birth" | "marriage" | "migration" | "other";
   title?: string | null;
@@ -320,22 +330,289 @@ export async function updatePerson(id: string, input: UpdatePersonInput) {
   return updated;
 }
 
-export async function deletePerson(id: string) {
+/**
+ * 人物删除影响预览
+ */
+export async function previewPersonDeletion(personId: string) {
   const session = await auth();
-  if (!session?.user?.id) {
+  const userId = session?.user?.id;
+  if (!userId) {
     throw new Error("未登录");
   }
 
-  const person = await prisma.person.findUnique({ where: { id } });
-  if (!person || person.createdBy !== session.user.id) {
+  const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+
+  const person = await prisma.person.findUnique({
+    where: { id: personId, deletedAt: null },
+  });
+
+  if (!person || person.createdBy !== userId || person.treeId !== activeTree.id) {
     throw new Error("无权操作");
   }
 
-  await prisma.personEvent.deleteMany({ where: { personId: id } });
-  await prisma.relationship.deleteMany({
-    where: { OR: [{ personAId: id }, { personBId: id }] },
+  const [activeRelationships, events] = await Promise.all([
+    prisma.relationship.findMany({
+      where: {
+        deletedAt: null,
+        OR: [{ personAId: personId }, { personBId: personId }],
+      },
+      include: {
+        personA: { select: { id: true, name: true } },
+        personB: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.personEvent.findMany({
+      where: { personId },
+      orderBy: { sortOrder: "asc" },
+    }),
+  ]);
+
+  const revision = await getTreeRevision(prisma, activeTree.id);
+
+  const preview = {
+    person: { id: person.id, name: person.name },
+    affected: {
+      relationshipCount: activeRelationships.length,
+      eventCount: events.length,
+      relationships: activeRelationships.map((r) => ({
+        id: r.id,
+        type: r.type,
+        otherPerson:
+          r.personAId === personId
+            ? { id: r.personB.id, name: r.personB.name }
+            : { id: r.personA.id, name: r.personA.name },
+      })),
+      events: events.map((e) => ({ id: e.id, type: e.type, title: e.title })),
+    },
+    revision,
+  };
+
+  const confirmationId = await createConfirmation(prisma, {
+    treeId: activeTree.id,
+    userId,
+    kind: "person_delete",
+    input: { personId },
+    revision,
+    previewResult: preview as any,
   });
-  await prisma.person.delete({ where: { id } });
+
+  return { preview, confirmationId };
+}
+
+/**
+ * 确认人物软删除
+ */
+export async function deletePerson(confirmationId: string, personId: string) {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) {
+    throw new Error("未登录");
+  }
+
+  const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+
+  await prisma.$transaction(async (tx) => {
+    const currentRevision = await getTreeRevision(tx, activeTree.id);
+    await consumeConfirmation(tx, {
+      confirmationId,
+      treeId: activeTree.id,
+      userId,
+      kind: "person_delete",
+      input: { personId },
+      currentRevision,
+    });
+
+    const person = await tx.person.findUnique({
+      where: { id: personId, deletedAt: null },
+    });
+
+    if (!person || person.createdBy !== userId || person.treeId !== activeTree.id) {
+      throw new Error("无权操作");
+    }
+
+    const relationships = await tx.relationship.findMany({
+      where: {
+        deletedAt: null,
+        OR: [{ personAId: personId }, { personBId: personId }],
+      },
+    });
+
+    const now = new Date();
+
+    const batch = await createAuditBatch(tx, {
+      treeId: activeTree.id,
+      actorId: userId,
+      action: "person_delete",
+      summary: { description: "删除人物：" + person.name + "，连带" + relationships.length + "条关系", personId, personName: person.name, relationshipCount: relationships.length },
+      entries: [
+        {
+          entityType: "person",
+          entityId: personId,
+          action: "delete",
+          beforeJson: { name: person.name, gender: person.gender },
+        },
+        ...relationships.map((r) => ({
+          entityType: "relationship" as const,
+          entityId: r.id,
+          action: "delete" as const,
+          beforeJson: { type: r.type, personAId: r.personAId, personBId: r.personBId },
+        })),
+      ],
+    });
+
+    await tx.person.update({
+      where: { id: personId },
+      data: {
+        deletedAt: now,
+        deletedBy: userId,
+        deletionOperationId: batch.batchId,
+      },
+    });
+
+    for (const rel of relationships) {
+      await tx.relationship.update({
+        where: { id: rel.id },
+        data: {
+          deletedAt: now,
+          deletedBy: userId,
+          deletionOperationId: batch.batchId,
+        },
+      });
+    }
+  });
 
   revalidatePath("/tree");
+}
+
+/**
+ * 获取可恢复的删除批次
+ */
+export async function getRecoverableDeletionBatches() {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) {
+    throw new Error("未登录");
+  }
+
+  const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+  return getDeletionBatches(prisma, activeTree.id);
+}
+
+/**
+ * 恢复删除批次中的人物和关系
+ */
+export async function restoreDeletionBatch(batchId: string) {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) {
+    throw new Error("未登录");
+  }
+
+  const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+
+  await prisma.$transaction(async (tx) => {
+    const batch = await tx.operationBatch.findUnique({
+      where: { id: batchId },
+      include: { entries: true },
+    });
+
+    if (!batch || batch.treeId !== activeTree.id || batch.status !== "complete") {
+      throw new Error("批次不存在或不可恢复");
+    }
+
+    const personEntries = batch.entries.filter((e) => e.entityType === "person");
+    for (const entry of personEntries) {
+      const person = await tx.person.findUnique({ where: { id: entry.entityId } });
+      if (!person || person.treeId !== activeTree.id) {
+        throw new Error("批次不属于当前家谱");
+      }
+    }
+
+    const treePersons = await tx.person.findMany({
+      where: activePersonInTree(userId, activeTree.id),
+      select: { id: true },
+    });
+    const activePersonIds = new Set(treePersons.map((p) => p.id));
+
+    // 将被恢复的人物也加入活跃集合，否则关系校验会因端点"不在活跃集合"而失败
+    for (const entry of personEntries) {
+      activePersonIds.add(entry.entityId);
+    }
+
+    const activeRelationships = await tx.relationship.findMany({
+      where: {
+        deletedAt: null,
+        personA: { deletedAt: null, createdBy: userId, treeId: activeTree.id },
+        personB: { deletedAt: null, createdBy: userId, treeId: activeTree.id },
+      },
+      select: { type: true, personAId: true, personBId: true },
+    });
+
+    const relEntries = batch.entries.filter((e) => e.entityType === "relationship");
+    for (const entry of relEntries) {
+      const beforeJson = entry.beforeJson as { type: string; personAId: string; personBId: string } | null;
+      if (!beforeJson) continue;
+
+      const validationResult = validateRelationshipCandidate(
+        {
+          type: beforeJson.type as "spouse" | "child",
+          personAId: beforeJson.personAId,
+          personBId: beforeJson.personBId,
+        },
+        activePersonIds,
+        activeRelationships.map((r) => ({
+          type: r.type as "spouse" | "child",
+          personAId: r.personAId,
+          personBId: r.personBId,
+        })),
+      );
+
+      if (!validationResult.valid) {
+        throw new Error(
+          "恢复失败: " + validationResult.error!.message,
+        );
+      }
+    }
+
+    for (const entry of personEntries) {
+      await tx.person.update({
+        where: { id: entry.entityId },
+        data: { deletedAt: null, deletedBy: null, deletionOperationId: null },
+      });
+    }
+
+    for (const entry of relEntries) {
+      await tx.relationship.update({
+        where: { id: entry.entityId },
+        data: { deletedAt: null, deletedBy: null, deletionOperationId: null },
+      });
+    }
+
+    await tx.operationBatch.update({
+      where: { id: batchId },
+      data: { status: "restored" },
+    });
+
+    await createAuditBatch(tx, {
+      treeId: activeTree.id,
+      actorId: userId,
+      action: "person_restore",
+      summary: { description: "恢复" + personEntries.length + "人及" + relEntries.length + "条关系", restoredBatchId: batchId, personCount: personEntries.length, relationshipCount: relEntries.length },
+      entries: [
+        ...personEntries.map((e) => ({
+          entityType: "person" as const,
+          entityId: e.entityId,
+          action: "restore" as const,
+        })),
+        ...relEntries.map((e) => ({
+          entityType: "relationship" as const,
+          entityId: e.entityId,
+          action: "restore" as const,
+        })),
+      ],
+    });
+  });
+
+  revalidatePath("/tree");
+  revalidatePath("/settings");
 }

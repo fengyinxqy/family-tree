@@ -7,11 +7,11 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String       @id @default(cuid())
+  email        String       @unique
   name         String
-  passwordHash String   @map("password_hash")
-  createdAt    DateTime @default(now()) @map("created_at")
+  passwordHash String       @map("password_hash")
+  createdAt    DateTime     @default(now()) @map("created_at")
   persons      Person[]
   familyTrees  FamilyTree[]
 
@@ -19,51 +19,59 @@ model User {
 }
 
 model FamilyTree {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  ownerId     String   @map("owner_id")
-  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  persons     Person[]
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id               String                  @id @default(cuid())
+  name             String
+  description      String?
+  ownerId          String                  @map("owner_id")
+  owner            User                    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  persons          Person[]
+  dataRevision     Int                     @default(0) @map("data_revision")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+  operationBatches OperationBatch[]
+  confirmations    OperationConfirmation[]
+  snapshots        FamilySnapshot[]
 
   @@index([ownerId, createdAt], map: "idx_family_trees_owner_created")
   @@map("family_trees")
 }
 
 model Person {
-  id              String         @id @default(cuid())
-  name            String
-  gender          String // "male" | "female"
-  birthDate       String?        @map("birth_date")
-  deathDate       String?        @map("death_date")
-  bio             String?
-  aliases         String[]       @default([])
-  generationNumber Int           @default(1) @map("generation_number")
-  generationLabel String?        @map("generation_label")
-  nativePlace     String?        @map("native_place")
-  notes           String?
-  posX            Float?         @map("pos_x")
-  posY            Float?         @map("pos_y")
-  createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt @map("updated_at")
-  createdBy       String         @map("created_by")
-  creator         User           @relation(fields: [createdBy], references: [id])
-  treeId          String         @map("tree_id")
-  tree            FamilyTree     @relation(fields: [treeId], references: [id], onDelete: Cascade)
-  relationsA      Relationship[] @relation("PersonA")
-  relationsB      Relationship[] @relation("PersonB")
-  events          PersonEvent[]
+  id                  String         @id @default(cuid())
+  name                String
+  gender              String
+  birthDate           String?        @map("birth_date")
+  deathDate           String?        @map("death_date")
+  bio                 String?
+  aliases             String[]       @default([])
+  generationNumber    Int            @default(1) @map("generation_number")
+  generationLabel     String?        @map("generation_label")
+  nativePlace         String?        @map("native_place")
+  notes               String?
+  posX                Float?         @map("pos_x")
+  posY                Float?         @map("pos_y")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+  createdBy           String         @map("created_by")
+  creator             User           @relation(fields: [createdBy], references: [id])
+  treeId              String         @map("tree_id")
+  tree                FamilyTree     @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  relationsA          Relationship[] @relation("PersonA")
+  relationsB          Relationship[] @relation("PersonB")
+  events              PersonEvent[]
+  deletedAt           DateTime?      @map("deleted_at")
+  deletedBy           String?        @map("deleted_by")
+  deletionOperationId String?        @map("deletion_operation_id")
 
   @@index([createdBy, treeId], map: "idx_persons_created_by_tree")
+  @@index([treeId, deletedAt], map: "idx_persons_tree_deleted")
   @@map("persons")
 }
 
 model PersonEvent {
   id          String   @id @default(cuid())
   personId    String   @map("person_id")
-  type        String // "birth" | "death" | "marriage" | "migration" | "other"
+  type        String
   title       String?
   dateLabel   String?  @map("date_label")
   location    String?
@@ -77,15 +85,87 @@ model PersonEvent {
 }
 
 model Relationship {
-  id        String   @id @default(cuid())
-  type      String // "spouse" | "child"
-  personAId String   @map("person_a_id")
-  personBId String   @map("person_b_id")
-  label     String?  @map("label")
-  sortOrder Int      @default(0) @map("sort_order")
-  createdAt DateTime @default(now()) @map("created_at")
-  personA   Person   @relation("PersonA", fields: [personAId], references: [id], onDelete: Cascade)
-  personB   Person   @relation("PersonB", fields: [personBId], references: [id], onDelete: Cascade)
+  id                  String    @id @default(cuid())
+  type                String
+  personAId           String    @map("person_a_id")
+  personBId           String    @map("person_b_id")
+  label               String?   @map("label")
+  sortOrder           Int       @default(0) @map("sort_order")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  personA             Person    @relation("PersonA", fields: [personAId], references: [id], onDelete: Cascade)
+  personB             Person    @relation("PersonB", fields: [personBId], references: [id], onDelete: Cascade)
+  deletedAt           DateTime? @map("deleted_at")
+  deletedBy           String?   @map("deleted_by")
+  deletionOperationId String?   @map("deletion_operation_id")
 
+  @@index([personAId, personBId, deletedAt], map: "idx_relationships_endpoints_deleted")
   @@map("relationships")
+}
+
+model OperationBatch {
+  id        String       @id @default(cuid())
+  treeId    String       @map("tree_id")
+  tree      FamilyTree   @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  actorId   String       @map("actor_id")
+  action    String
+  status    String       @default("complete")
+  summary   Json         @default("{}")
+  createdAt DateTime     @default(now()) @map("created_at")
+  entries   AuditEntry[]
+
+  @@index([treeId, createdAt], map: "idx_operation_batches_tree_created")
+  @@map("operation_batches")
+}
+
+model AuditEntry {
+  id         String         @id @default(cuid())
+  batchId    String         @map("batch_id")
+  batch      OperationBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  entityType String         @map("entity_type")
+  entityId   String         @map("entity_id")
+  action     String
+  beforeJson Json?          @map("before_json")
+  afterJson  Json?          @map("after_json")
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  @@index([batchId], map: "idx_audit_entries_batch")
+  @@index([entityType, entityId], map: "idx_audit_entries_entity")
+  @@map("audit_entries")
+}
+
+model OperationConfirmation {
+  id            String     @id @default(cuid())
+  treeId        String     @map("tree_id")
+  tree          FamilyTree @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  userId        String     @map("user_id")
+  kind          String
+  inputHash     String     @map("input_hash")
+  revision      Int
+  previewResult Json       @default("{}") @map("preview_result")
+  consumed      Boolean    @default(false)
+  expiresAt     DateTime   @map("expires_at")
+  createdAt     DateTime   @default(now()) @map("created_at")
+
+  @@index([treeId, userId, kind, consumed], map: "idx_confirmations_lookup")
+  @@index([expiresAt], map: "idx_confirmations_expires")
+  @@map("operation_confirmations")
+}
+
+model FamilySnapshot {
+  id                String     @id @default(cuid())
+  treeId            String     @map("tree_id")
+  tree              FamilyTree @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  reason            String
+  version           Int        @default(1)
+  sourceRevision    Int        @map("source_revision")
+  creatorId         String     @map("creator_id")
+  operationId       String?    @map("operation_id")
+  snapshotJson      Json       @map("snapshot_json")
+  personCount       Int        @default(0) @map("person_count")
+  relationshipCount Int        @default(0) @map("relationship_count")
+  eventCount        Int        @default(0) @map("event_count")
+  createdAt         DateTime   @default(now()) @map("created_at")
+
+  @@index([treeId, createdAt], map: "idx_snapshots_tree_created")
+  @@map("family_snapshots")
 }

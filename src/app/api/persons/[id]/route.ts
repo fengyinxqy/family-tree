@@ -31,7 +31,6 @@ export async function PUT(
   try {
     const body = await req.json();
 
-    // 只把 body 中存在的字段传给 service（undefined 的字段 Prisma 会忽略）
     const data: Record<string, unknown> = {};
     if (body.name !== undefined) data.name = body.name;
     if (body.gender !== undefined) data.gender = body.gender;
@@ -55,24 +54,37 @@ export async function PUT(
   }
 }
 
+// DELETE handler: uses the new preview-confirm flow
 export async function DELETE(
   _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  return Response.json({
+    error: "请使用预览-确认流程删除人物（previewPersonDeletion + deletePerson）",
+    deprecated: true
+  }, { status: 410 });
+}
+
+// PATCH for position updates
+export async function PATCH(
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
   const { id } = await params;
-
-  const { deletePerson } = await import("@/services/person.service");
-
-  try {
-    await deletePerson(id);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "删除失败";
-    const status = message === "无权操作" ? 403 : 404;
-    return NextResponse.json({ error: message }, { status });
+  const { prisma } = await import("@/lib/prisma");
+  const person = await prisma.person.findUnique({ where: { id, deletedAt: null } });
+  if (!person || person.createdBy !== session.user.id) {
+    return NextResponse.json({ error: "无权操作" }, { status: 403 });
   }
+
+  const { x, y } = await request.json();
+  await prisma.person.update({
+    where: { id },
+    data: { posX: x, posY: y },
+  });
 
   return NextResponse.json({ success: true });
 }

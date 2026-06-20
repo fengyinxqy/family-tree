@@ -1,21 +1,4 @@
-﻿## Purpose
-
-Define the backup and restore behavior for a user's family data so the system can provide dependable export, recovery, and migration foundations.
-
-## Requirements
-
-### Requirement: System SHALL export a complete JSON backup for the current user's family data
-The system SHALL allow an authenticated user to export a versioned JSON backup that contains the complete persistent family data owned by that user, including people, raw relationships, and person events.
-
-#### Scenario: User exports a family backup
-- **WHEN** an authenticated user triggers a family data export
-- **THEN** the system SHALL return a JSON document containing that user's people, relationships, and person events
-- **AND** the document SHALL include a format version so later imports can validate compatibility
-
-#### Scenario: Derived relationship views are excluded from backup
-- **WHEN** the system generates an export document
-- **THEN** it SHALL include only persistent source records
-- **AND** it SHALL NOT serialize derived sibling summaries or other read-time view data
+## ADDED Requirements
 
 ### Requirement: System SHALL preview restore impact before destructive import
 The system SHALL provide a read-only preflight for a valid JSON backup before replacing active family data, and SHALL bind the preview to the authenticated user, active family tree, exact import document, and current family revision.
@@ -34,6 +17,8 @@ The system SHALL provide a read-only preflight for a valid JSON backup before re
 #### Scenario: Family changes after preview
 - **WHEN** the active family revision no longer matches the preview baseline
 - **THEN** the system SHALL reject execution and require a new preview
+
+## MODIFIED Requirements
 
 ### Requirement: System SHALL import a valid JSON backup as an atomic restore operation
 The system SHALL allow an authenticated user to restore family data from a valid system-generated JSON backup only after confirming an unexpired preview for that exact document and unchanged family revision, and the restore MUST be atomic.
@@ -66,8 +51,8 @@ The system SHALL validate document structure, format compatibility, record refer
 - **THEN** the system SHALL reject the preview instead of issuing an executable confirmation
 
 #### Scenario: Invalid document shape is rejected
-- **WHEN** a user uploads a malformed or incomplete backup document
-- **THEN** the system SHALL reject the import with validation feedback before any database writes occur
+- **WHEN** a user previews a malformed or incomplete backup document
+- **THEN** the system SHALL reject it with validation feedback before any database writes occur
 
 #### Scenario: Imported graph violates genealogy integrity
 - **WHEN** the backup contains a self-reference, duplicate relationship, ancestry cycle, or generation contradiction
