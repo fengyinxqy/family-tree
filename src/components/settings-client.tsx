@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, startTransition } from "react";
 import { Bot, PanelsTopLeft, Trees, RotateCcw, Camera, History, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { AppPanel } from "@/components/app-surface";
@@ -67,8 +67,8 @@ interface SnapshotItem {
 }
 
 export function SettingsClient() {
-  const [defaultView, setDefaultView] = useState<DefaultView>("tree");
-  const [panelState, setPanelState] = useState<PanelState>("assistant");
+  const [defaultView, setDefaultView] = useState<DefaultView>(() => { if (typeof window !== "undefined") { return (window.localStorage.getItem("family.workspace.defaultView") as DefaultView | null) ?? "tree"; } return "tree"; });
+  const [panelState, setPanelState] = useState<PanelState>(() => { if (typeof window !== "undefined") { return (window.localStorage.getItem("family.workspace.panel") as PanelState | null) ?? "assistant"; } return "assistant"; });
 
   const [deletionBatches, setDeletionBatches] = useState<DeletionBatch[]>([]);
   const [loadingBatches, setLoadingBatches] = useState(false);
@@ -89,29 +89,33 @@ export function SettingsClient() {
   function persistView(nextView: DefaultView) { setDefaultView(nextView); window.localStorage.setItem("family.workspace.defaultView", nextView); }
   function persistPanel(nextPanel: PanelState) { setPanelState(nextPanel); window.localStorage.setItem("family.workspace.panel", nextPanel); }
 
-  const loadDeletionBatches = useCallback(async () => {
-    setLoadingBatches(true);
+  const loadDeletionBatches = useCallback(() => {
+    startTransition(() => setLoadingBatches(true));
+    return (async () => {
     try { setDeletionBatches(await getRecoverableDeletionBatches()); } catch (e) { console.error(e); } finally { setLoadingBatches(false); }
+    })();
   }, []);
 
-  const loadSnapshots = useCallback(async () => {
-    setLoadingSnapshots(true);
+  const loadSnapshots = useCallback(() => {
+    startTransition(() => setLoadingSnapshots(true));
+    return (async () => {
     try { setSnapshots(await getSnapshotList()); } catch (e) { console.error(e); } finally { setLoadingSnapshots(false); }
+    })();
   }, []);
 
-  const loadOpHistory = useCallback(async (page: number) => {
-    setLoadingOps(true);
+  const loadOpHistory = useCallback((page: number) => {
+    startTransition(() => setLoadingOps(true));
+    return (async () => {
     try {
       const result = await getOperationHistoryForCurrentUser(page, PAGE_SIZE);
       setOpHistory(result.items);
       setOpTotal(result.total);
       setOpPage(result.page);
     } catch (e) { console.error(e); } finally { setLoadingOps(false); }
+    })();
   }, []);
 
   useEffect(() => {
-    setDefaultView((window.localStorage.getItem("family.workspace.defaultView") as DefaultView | null) ?? "tree");
-    setPanelState((window.localStorage.getItem("family.workspace.panel") as PanelState | null) ?? "assistant");
     loadDeletionBatches();
     loadSnapshots();
     loadOpHistory(1);

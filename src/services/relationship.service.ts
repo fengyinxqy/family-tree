@@ -133,7 +133,7 @@ export async function createRelationship(input: CreateRelationshipInput) {
 
   const result = await prisma.$transaction(async (tx) => {
     // 加载活跃图和当前修订号
-    const [persons, relationships, treeRevision] = await Promise.all([
+    const [persons, relationships] = await Promise.all([
       tx.person.findMany({
         where: activePersonInTree(userId, activeTree.id),
         select: { id: true, name: true, generationNumber: true },

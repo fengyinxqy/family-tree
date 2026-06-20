@@ -18,7 +18,6 @@ import { previewRelationshipDeletion, deleteRelationship } from "@/services/rela
 export function DeleteRelationButton({ relationId }: { relationId: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [isPreviewing, setIsPreviewing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [previewData, setPreviewData] = useState<{
     relationship: { id: string; type: string; personA: { id: string; name: string }; personB: { id: string; name: string } };
@@ -28,16 +27,14 @@ export function DeleteRelationButton({ relationId }: { relationId: string }) {
   const [confirmationId, setConfirmationId] = useState<string | null>(null);
 
   async function handlePreview() {
-    setIsPreviewing(true);
-    try {
+        try {
       const result = await previewRelationshipDeletion(relationId);
       setPreviewData(result.preview);
       setConfirmationId(result.confirmationId);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "加载预览失败");
     } finally {
-      setIsPreviewing(false);
-    }
+          }
   }
 
   async function handleDelete() {

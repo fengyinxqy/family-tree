@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "typecheck": "tsc --noEmit",
+    "quality": "npm run lint && npm run typecheck && npm test && npm run build",
     "start": "next start",
     "lint": "eslint",
     "test": "node --import tsx --test src/**/*.test.ts",

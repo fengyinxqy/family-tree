@@ -232,7 +232,7 @@ function TreeSpaceSwitcher({
           </DialogHeader>
 
           <p className="text-sm text-muted-foreground">
-            确定要删除<span className="font-medium text-foreground">"{deleteTarget?.name}"</span>吗？该空间内的所有成员和关系数据将被一并删除。
+            确定要删除<span className="font-medium text-foreground">&ldquo;{deleteTarget?.name}&rdquo;</span>吗？该空间内的所有成员和关系数据将被一并删除。
           </p>
 
           <DialogFooter>
@@ -581,14 +581,11 @@ export default function FamilyTree({
   const [activeGeneration, setActiveGeneration] = useState<string | null>(initialState.generation);
   const [panel, setPanel] = useState<PanelState>(initialState.panel);
   const [headerCollapsed, setHeaderCollapsed] = useState(() => {
+    if (typeof window !== "undefined" && window.localStorage.getItem("family.workspace.headerCollapsed") === "true") {
+      return true;
+    }
     return false;
   });
-  useEffect(() => {
-    const stored = window.localStorage.getItem("family.workspace.headerCollapsed");
-    if (stored === "true") {
-      setHeaderCollapsed(true);
-    }
-  }, []);
 
   const generationGroups = useMemo(() => getGenerationGroups(persons, relationships), [persons, relationships]);
   const rootIds = useMemo(() => getRootPersonIds(persons, relationships), [persons, relationships]);

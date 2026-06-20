@@ -16,7 +16,7 @@ import {
   getTreeRevision,
   getDeletionBatches,
 } from "@/lib/data-safety";
-import { validateRelationshipCandidate, type RelationshipCandidate } from "@/lib/integrity";
+import { validateRelationshipCandidate } from "@/lib/integrity";
 export interface PersonEventInput {
   type: "birth" | "marriage" | "migration" | "other";
   title?: string | null;
@@ -393,7 +393,7 @@ export async function previewPersonDeletion(personId: string) {
     kind: "person_delete",
     input: { personId },
     revision,
-    previewResult: preview as any,
+    previewResult: preview as Record<string, unknown>,
   });
 
   return { preview, confirmationId };

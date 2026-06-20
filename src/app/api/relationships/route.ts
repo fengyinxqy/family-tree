@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 }
 
 // DELETE handler: uses the new preview-confirm flow
-export async function DELETE(_request: Request) {
+export async function DELETE() {
   return Response.json({
     error: "请使用预览-确认流程删除关系（previewRelationshipDeletion + deleteRelationship）",
     deprecated: true

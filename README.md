@@ -278,6 +278,34 @@ target.png       项目目标效果图
 - **垂直场景智能应用**
 - **可持续迭代的 MVP 开源项目**
 
+
+## 开发与质量
+
+### 环境前提
+
+- Node.js >= 20
+- PostgreSQL（通过 `DATABASE_URL` 环境变量配置）
+- 首次运行前执行 `npx prisma migrate deploy` 初始化数据库
+
+### 质量检查命令
+
+| 命令 | 用途 |
+|------|------|
+| `npm run lint` | ESLint 静态检查 |
+| `npm run typecheck` | TypeScript 类型检查 |
+| `npm test` | 自动化测试（Node 原生测试运行器） |
+| `npm run build` | 生产构建 |
+| `npm run quality` | 统一质量门禁：依次执行 lint → typecheck → test → build |
+
+质量门禁规则：任一步骤失败即返回非零退出码。CI 环境应调用 `npm run quality` 作为唯一验收入口。
+
+### 工程约束
+
+- **零 warning 基线**：`npm run lint` 必须零错误零警告，不允许使用全局限规则关闭或批量忽略
+- **类型安全**：禁止在服务层使用 `any`，必须使用 Prisma 生成类型或领域类型
+- **React 状态初始化**：读取 `localStorage` 等客户端 API 的状态必须使用 `useState` 惰性初始化器，避免在 `useEffect` 中同步 `setState`
+- **Next.js 版本**：本项目使用 Next.js 16，编写代码前请阅读 `node_modules/next/dist/docs/` 中的相关指南
+
 ## 后续可以继续增强的方向
 
 详细规划参见 [V1.2–V1.4 产品路线图](./docs/product-roadmap-v1.2-v1.4.md)。

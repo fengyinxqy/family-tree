@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import {
@@ -18,46 +18,40 @@ export function GlobalSearch() {
   const router = useRouter();
 
   // 打开时懒加载人员数据
-  useEffect(() => {
-    if (!open || persons.length > 0) return;
-
-    let cancelled = false;
-    setLoading(true);
-
-    fetch("/api/persons")
-      .then((res) => res.json())
-      .then((data: Array<Record<string, unknown>>) => {
-        if (cancelled) return;
-        const mapped: PersonData[] = data.map((p) => ({
-          id: p.id as string,
-          name: p.name as string,
-          gender: p.gender as "male" | "female",
-          birthDate: (p.birthDate as string) ?? null,
-          deathDate: (p.deathDate as string) ?? null,
-          bio: (p.bio as string) ?? null,
-          aliases: (p.aliases as string[]) ?? [],
-          generationNumber: (p.generationNumber as number) ?? 1,
-          generationLabel: (p.generationLabel as string) ?? null,
-          nativePlace: (p.nativePlace as string) ?? null,
-          notes: (p.notes as string) ?? null,
-          posX: (p.posX as number) ?? null,
-          posY: (p.posY as number) ?? null,
-          createdAt: p.createdAt as string,
-          treeId: p.treeId as string,
-        }));
-        setPersons(mapped);
-      })
-      .catch(() => {
-        // 加载失败时静默处理
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, persons.length]);
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (nextOpen && persons.length === 0 && !loading) {
+      setLoading(true);
+      fetch("/api/persons")
+        .then((res) => res.json())
+        .then((data: Array<Record<string, unknown>>) => {
+          const mapped: PersonData[] = data.map((p) => ({
+            id: p.id as string,
+            name: p.name as string,
+            gender: p.gender as "male" | "female",
+            birthDate: (p.birthDate as string) ?? null,
+            deathDate: (p.deathDate as string) ?? null,
+            bio: (p.bio as string) ?? null,
+            aliases: (p.aliases as string[]) ?? [],
+            generationNumber: (p.generationNumber as number) ?? 1,
+            generationLabel: (p.generationLabel as string) ?? null,
+            nativePlace: (p.nativePlace as string) ?? null,
+            notes: (p.notes as string) ?? null,
+            posX: (p.posX as number) ?? null,
+            posY: (p.posY as number) ?? null,
+            createdAt: p.createdAt as string,
+            treeId: p.treeId as string,
+          }));
+          setPersons(mapped);
+        })
+        .catch(() => {
+          // 加载失败时静默处理
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [persons.length, loading]);
 
   // Ctrl+K / Cmd+K 快捷键
   useEffect(() => {
@@ -81,7 +75,7 @@ export function GlobalSearch() {
   );
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger
         className="hidden items-center gap-2 rounded-full border border-border/70 bg-card/75 px-3 py-2 text-left transition-colors hover:bg-card hover:border-border lg:flex"
         aria-label="搜索人物、事件、文献..."

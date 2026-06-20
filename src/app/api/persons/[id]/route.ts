@@ -55,10 +55,7 @@ export async function PUT(
 }
 
 // DELETE handler: uses the new preview-confirm flow
-export async function DELETE(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function DELETE() {
   return Response.json({
     error: "请使用预览-确认流程删除人物（previewPersonDeletion + deletePerson）",
     deprecated: true

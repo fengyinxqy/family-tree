@@ -7,7 +7,6 @@ import {
   type BackupRelationship,
   type BackupEvent,
 } from "@/lib/import-export/backup-format";
-import { activePersonInTree, activeRelationshipInTree } from "@/lib/data-safety";
 
 type PersonRecord = {
   id: string;
