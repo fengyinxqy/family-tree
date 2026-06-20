@@ -79,7 +79,7 @@ export default function EditPersonPage() {
       return;
     }
 
-    toast.success("人物信息已更新");
+    toast.success("人物修改草稿已创建");
     router.push(`/person/${id}`);
     router.refresh();
   }

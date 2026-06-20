@@ -33,33 +33,30 @@ export const ACTIVE_MATERIAL_LINK_WHERE = {
 } as const satisfies Prisma.MaterialLinkWhereInput;
 
 export function activeMaterialInTree(
-  createdBy: string,
   treeId: string,
 ): Prisma.SourceMaterialWhereInput {
-  return { deletedAt: null, createdBy, treeId };
+  return { deletedAt: null, treeId };
 }
 
 /**
  * 活跃人员+指定创建者和树的查询条件
  */
 export function activePersonInTree(
-  createdBy: string,
   treeId: string,
 ): Prisma.PersonWhereInput {
-  return { deletedAt: null, createdBy, treeId };
+  return { deletedAt: null, treeId };
 }
 
 /**
  * 活跃关系+两端人员均在指定树中的查询条件
  */
 export function activeRelationshipInTree(
-  userId: string,
   treeId: string,
 ): Prisma.RelationshipWhereInput {
   return {
     deletedAt: null,
-    personA: { deletedAt: null, createdBy: userId, treeId },
-    personB: { deletedAt: null, createdBy: userId, treeId },
+    personA: { deletedAt: null, treeId },
+    personB: { deletedAt: null, treeId },
   };
 }
 

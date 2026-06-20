@@ -580,12 +580,7 @@ export default function FamilyTree({
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(initialState.personId);
   const [activeGeneration, setActiveGeneration] = useState<string | null>(initialState.generation);
   const [panel, setPanel] = useState<PanelState>(initialState.panel);
-  const [headerCollapsed, setHeaderCollapsed] = useState(() => {
-    if (typeof window !== "undefined" && window.localStorage.getItem("family.workspace.headerCollapsed") === "true") {
-      return true;
-    }
-    return false;
-  });
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
 
   const generationGroups = useMemo(() => getGenerationGroups(persons, relationships), [persons, relationships]);
   const rootIds = useMemo(() => getRootPersonIds(persons, relationships), [persons, relationships]);
@@ -594,6 +589,9 @@ export default function FamilyTree({
     if (typeof window === "undefined") {
       return;
     }
+
+    const storedHeaderCollapsed = window.localStorage.getItem("family.workspace.headerCollapsed") === "true";
+    queueMicrotask(() => setHeaderCollapsed(storedHeaderCollapsed));
 
     const preferredView = window.localStorage.getItem("family.workspace.defaultView") as WorkspaceView | null;
     const preferredPanel = window.localStorage.getItem("family.workspace.panel") as PanelState | null;

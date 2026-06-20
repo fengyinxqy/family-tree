@@ -6,6 +6,7 @@ import { createFamilyExchangeZip, parseFamilyExchangePackage, type FamilyExchang
 import { exportFamilyBackupForUser } from "@/services/import-export.service";
 import { buildRestorePayloads } from "@/lib/import-export/backup-format";
 import { buildMaterialSnapshotDocument } from "@/lib/data-safety/material-snapshot";
+import { authorizeFamilyAction } from "@/services/family-authorization.service";
 
 async function readableToBytes(stream: Readable) {
   const chunks: Buffer[] = [];
@@ -18,11 +19,12 @@ function stableId(prefix: string, index: number) {
 }
 
 export async function exportFamilyExchangePackageForUser(userId: string, treeId: string) {
+  await authorizeFamilyAction(userId, treeId, "export.read");
   const [persons, relationships, events, materials] = await Promise.all([
-    prisma.person.findMany({ where: { createdBy: userId, treeId, deletedAt: null }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] }),
-    prisma.relationship.findMany({ where: { deletedAt: null, personA: { createdBy: userId, treeId, deletedAt: null }, personB: { deletedAt: null } }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] }),
-    prisma.personEvent.findMany({ where: { person: { createdBy: userId, treeId, deletedAt: null } }, orderBy: [{ personId: "asc" }, { sortOrder: "asc" }, { id: "asc" }] }),
-    prisma.sourceMaterial.findMany({ where: { createdBy: userId, treeId, deletedAt: null }, include: { files: { where: { deletedAt: null }, orderBy: [{ displayOrder: "asc" }, { id: "asc" }] }, links: { where: { deletedAt: null } } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] }),
+    prisma.person.findMany({ where: { treeId, deletedAt: null }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] }),
+    prisma.relationship.findMany({ where: { deletedAt: null, personA: { treeId, deletedAt: null }, personB: { treeId, deletedAt: null } }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] }),
+    prisma.personEvent.findMany({ where: { person: { treeId, deletedAt: null } }, orderBy: [{ personId: "asc" }, { sortOrder: "asc" }, { id: "asc" }] }),
+    prisma.sourceMaterial.findMany({ where: { treeId, deletedAt: null }, include: { files: { where: { deletedAt: null }, orderBy: [{ displayOrder: "asc" }, { id: "asc" }] }, links: { where: { deletedAt: null } } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] }),
   ]);
 
   const personIds = new Map(persons.map((person, index) => [person.id, stableId("person", index)]));
@@ -66,6 +68,7 @@ export async function exportFamilyExchangePackageForUser(userId: string, treeId:
 }
 
 export async function previewFamilyExchangeImport(userId: string, treeId: string, bytes: Uint8Array) {
+  await authorizeFamilyAction(userId, treeId, "import.prepare");
   const { manifest, packageHash } = parseFamilyExchangePackage(bytes);
   const revision = await getTreeRevision(prisma, treeId);
   const preview = { summary: { totalPersons: manifest.persons.length, totalRelationships: manifest.relationships.length, totalEvents: manifest.events.length, totalMaterials: manifest.materials.length, totalFiles: manifest.files.length }, warnings: [], conflicts: [], valid: true, revision };
@@ -74,6 +77,7 @@ export async function previewFamilyExchangeImport(userId: string, treeId: string
 }
 
 export async function executeFamilyExchangeImport(userId: string, treeId: string, confirmationId: string, bytes: Uint8Array) {
+  await authorizeFamilyAction(userId, treeId, "import.execute");
   const { manifest, payloads, packageHash } = parseFamilyExchangePackage(bytes);
   const storage = getObjectStorage();
   const stagedKeys = new Map<string, string>();

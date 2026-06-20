@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getActiveFamilyTreeForUser } from "@/services/family-tree-space.service";
+import { authorizeFamilyAction } from "@/services/family-authorization.service";
 import {
   createAuditBatch,
   createConfirmation,
@@ -46,6 +47,7 @@ export async function createSnapshot(reason: "manual" | "pre_import" | "pre_rest
   const userId = session?.user?.id;
   if (!userId) throw new Error("未登录");
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+  await authorizeFamilyAction(userId, activeTree.id, "recovery.manage");
   const backup = await exportFamilyBackupForUser(userId, activeTree.id);
   const snapshotDocument = await buildMaterialSnapshotDocument(userId, activeTree.id, backup);
 
@@ -83,6 +85,7 @@ export async function getSnapshotList(): Promise<SnapshotListItem[]> {
   const userId = session?.user?.id;
   if (!userId) throw new Error("未登录");
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+  await authorizeFamilyAction(userId, activeTree.id, "recovery.read");
   return prisma.familySnapshot.findMany({
     where: { treeId: activeTree.id },
     orderBy: { createdAt: "desc" },
@@ -96,12 +99,13 @@ export async function previewImport(input: unknown) {
   const userId = session?.user?.id;
   if (!userId) throw new Error("未登录");
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+  await authorizeFamilyAction(userId, activeTree.id, "import.prepare");
   const document = validateFamilyBackupDocument(input);
   const personIds = new Set(document.persons.map((p) => p.id));
   const duplicateIds = document.persons.filter((p, i) => document.persons.findIndex((q) => q.id === p.id) < i).map((p) => p.id);
   const brokenRefs = document.relationships.filter((r) => !personIds.has(r.personAId) || !personIds.has(r.personBId));
   const brokenEvents = document.events.filter((e) => !personIds.has(e.personId));
-  const currentPersons = await prisma.person.findMany({ where: activePersonInTree(userId, activeTree.id), select: { id: true, name: true } });
+  const currentPersons = await prisma.person.findMany({ where: activePersonInTree(activeTree.id), select: { id: true, name: true } });
   const currentPersonIds = new Set(currentPersons.map((p) => p.id));
   const newPersons = document.persons.filter((p) => !currentPersonIds.has(p.id));
   const replacedPersons = document.persons.filter((p) => currentPersonIds.has(p.id));
@@ -129,6 +133,7 @@ export async function executeImport(confirmationId: string, input: unknown) {
   const userId = session?.user?.id;
   if (!userId) throw new Error("未登录");
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+  await authorizeFamilyAction(userId, activeTree.id, "import.execute");
   const result = await prisma.$transaction(async (tx) => {
     const currentRevision = await getTreeRevision(tx, activeTree.id);
     await consumeConfirmation(tx, { confirmationId, treeId: activeTree.id, userId, kind: "import", input, currentRevision });
@@ -137,9 +142,9 @@ export async function executeImport(confirmationId: string, input: unknown) {
     await tx.familySnapshot.create({ data: { treeId: activeTree.id, reason: "pre_import", version: 2, sourceRevision: currentRevision, creatorId: userId, snapshotJson: snapshotDocument as Prisma.InputJsonValue, personCount: backup.persons.length, relationshipCount: backup.relationships.length, eventCount: backup.events.length, materialCount: snapshotDocument.materials.length, fileCount: snapshotDocument.mediaObjects.length } });
     const document = validateFamilyBackupDocument(input);
     await tx.sourceMaterial.deleteMany({ where: { treeId: activeTree.id } });
-    await tx.relationship.deleteMany({ where: { personA: { createdBy: userId, treeId: activeTree.id } } });
-    await tx.personEvent.deleteMany({ where: { person: { createdBy: userId, treeId: activeTree.id } } });
-    await tx.person.deleteMany({ where: { createdBy: userId, treeId: activeTree.id } });
+    await tx.relationship.deleteMany({ where: { personA: { treeId: activeTree.id } } });
+    await tx.personEvent.deleteMany({ where: { person: { treeId: activeTree.id } } });
+    await tx.person.deleteMany({ where: { treeId: activeTree.id } });
     const personIdMap = new Map<string, string>();
     for (const person of document.persons) {
       const created = await tx.person.create({ data: { name: person.name, gender: person.gender, birthDate: person.birthDate, deathDate: person.deathDate, bio: person.bio, aliases: person.aliases, generationNumber: person.generationNumber, generationLabel: person.generationLabel, nativePlace: person.nativePlace, notes: person.notes, posX: person.posX, posY: person.posY, createdAt: new Date(person.createdAt), createdBy: userId, treeId: activeTree.id } });
@@ -160,6 +165,7 @@ export async function previewSnapshotRestore(snapshotId: string) {
   const userId = session?.user?.id;
   if (!userId) throw new Error("未登录");
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+  await authorizeFamilyAction(userId, activeTree.id, "recovery.manage");
   const snapshot = await prisma.familySnapshot.findUnique({ where: { id: snapshotId } });
   if (!snapshot || snapshot.treeId !== activeTree.id) throw new Error("快照不存在或不属于当前家谱");
   const document = validateMaterialSnapshotDocument(snapshot.snapshotJson as unknown);
@@ -189,6 +195,7 @@ export async function executeSnapshotRestore(confirmationId: string, snapshotId:
   const userId = session?.user?.id;
   if (!userId) throw new Error("未登录");
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+  await authorizeFamilyAction(userId, activeTree.id, "recovery.manage");
   const currentBackup = await exportFamilyBackupForUser(userId, activeTree.id);
   const currentSnapshot = await buildMaterialSnapshotDocument(userId, activeTree.id, currentBackup);
   const currentRevision = await getTreeRevision(prisma, activeTree.id);
@@ -201,9 +208,9 @@ export async function executeSnapshotRestore(confirmationId: string, snapshotId:
     const document = validateMaterialSnapshotDocument(snapshot.snapshotJson as unknown);
     await assertSnapshotFileObjectsAvailable(document);
     await tx.sourceMaterial.deleteMany({ where: { treeId: activeTree.id } });
-    await tx.relationship.deleteMany({ where: { personA: { createdBy: userId, treeId: activeTree.id } } });
-    await tx.personEvent.deleteMany({ where: { person: { createdBy: userId, treeId: activeTree.id } } });
-    await tx.person.deleteMany({ where: { createdBy: userId, treeId: activeTree.id } });
+    await tx.relationship.deleteMany({ where: { personA: { treeId: activeTree.id } } });
+    await tx.personEvent.deleteMany({ where: { person: { treeId: activeTree.id } } });
+    await tx.person.deleteMany({ where: { treeId: activeTree.id } });
     const personIdMap = new Map<string, string>();
     for (const person of document.persons) {
       const created = await tx.person.create({ data: { name: person.name, gender: person.gender, birthDate: person.birthDate, deathDate: person.deathDate, bio: person.bio, aliases: person.aliases, generationNumber: person.generationNumber, generationLabel: person.generationLabel, nativePlace: person.nativePlace, notes: person.notes, posX: person.posX, posY: person.posY, createdAt: new Date(person.createdAt), createdBy: userId, treeId: activeTree.id } });

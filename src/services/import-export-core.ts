@@ -49,7 +49,7 @@ type PersonEventRecord = {
 
 type TransactionClient = {
   relationship: {
-    deleteMany(args: { where: { personA: { createdBy: string; treeId: string } } }): Promise<unknown>;
+    deleteMany(args: { where: { personA: { treeId: string } } }): Promise<unknown>;
     createMany(args: {
       data: Array<{
         type: "spouse" | "child";
@@ -62,7 +62,7 @@ type TransactionClient = {
     }): Promise<unknown>;
   };
   personEvent: {
-    deleteMany(args: { where: { person: { createdBy: string; treeId: string } } }): Promise<unknown>;
+    deleteMany(args: { where: { person: { treeId: string } } }): Promise<unknown>;
     createMany(args: {
       data: Array<{
         personId: string;
@@ -77,7 +77,7 @@ type TransactionClient = {
     }): Promise<unknown>;
   };
   person: {
-    deleteMany(args: { where: { createdBy: string; treeId: string } }): Promise<unknown>;
+    deleteMany(args: { where: { treeId: string } }): Promise<unknown>;
     create(args: {
       data: {
         name: string;
@@ -103,19 +103,19 @@ type TransactionClient = {
 type PrismaLike = {
   person: {
     findMany(args: {
-      where: { createdBy: string; treeId: string; deletedAt: null };
+      where: { treeId: string; deletedAt: null };
       orderBy: Array<{ createdAt: "asc" } | { id: "asc" }>;
     }): Promise<PersonRecord[]>;
   };
   relationship: {
     findMany(args: {
-      where: { personA: { createdBy: string; treeId: string; deletedAt: null }; deletedAt: null };
+      where: { personA: { treeId: string; deletedAt: null }; deletedAt: null };
       orderBy: Array<{ sortOrder: "asc" } | { createdAt: "asc" } | { id: "asc" }>;
     }): Promise<RelationshipRecord[]>;
   };
   personEvent: {
     findMany(args: {
-      where: { person: { createdBy: string; treeId: string; deletedAt: null } };
+      where: { person: { treeId: string; deletedAt: null } };
       orderBy: Array<
         { personId: "asc" } | { sortOrder: "asc" } | { createdAt: "asc" } | { id: "asc" }
       >;
@@ -132,15 +132,15 @@ export function createImportExportService(deps: {
     // 仅导出活跃业务记录，排除软删除、审计、确认和快照数据
     const [persons, relationships, events] = await Promise.all([
       deps.prisma.person.findMany({
-        where: { createdBy: userId, treeId, deletedAt: null },
+        where: { treeId, deletedAt: null },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       }),
       deps.prisma.relationship.findMany({
-        where: { personA: { createdBy: userId, treeId, deletedAt: null }, deletedAt: null },
+        where: { personA: { treeId, deletedAt: null }, deletedAt: null },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       }),
       deps.prisma.personEvent.findMany({
-        where: { person: { createdBy: userId, treeId, deletedAt: null } },
+        where: { person: { treeId, deletedAt: null } },
         orderBy: [{ personId: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       }),
     ]);
@@ -191,13 +191,13 @@ export function createImportExportService(deps: {
     const summary = await deps.prisma.$transaction(async (tx) => {
       // 清空活跃数据（导入为原子替换操作）
       await tx.relationship.deleteMany({
-        where: { personA: { createdBy: userId, treeId } },
+        where: { personA: { treeId } },
       });
       await tx.personEvent.deleteMany({
-        where: { person: { createdBy: userId, treeId } },
+        where: { person: { treeId } },
       });
       await tx.person.deleteMany({
-        where: { createdBy: userId, treeId },
+        where: { treeId },
       });
 
       const personIdMap = new Map<string, string>();

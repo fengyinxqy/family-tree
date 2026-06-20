@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getActiveFamilyTreeForUser } from "@/services/family-tree-space.service";
+import { authorizeFamilyAction } from "@/services/family-authorization.service";
 import { validateRelationshipCandidate, type RelationshipCandidate } from "@/lib/integrity";
 import {
   activePersonInTree,
@@ -33,11 +34,11 @@ export async function syncGenerationNumbersForComponent(
 ) {
   const [persons, relationships] = await Promise.all([
     tx.person.findMany({
-      where: activePersonInTree(userId, treeId),
+      where: activePersonInTree(treeId),
       select: { id: true, generationNumber: true },
     }),
     tx.relationship.findMany({
-      where: activeRelationshipInTree(userId, treeId),
+      where: activeRelationshipInTree(treeId),
       select: {
         type: true,
         personAId: true,
@@ -130,16 +131,17 @@ export async function createRelationship(input: CreateRelationshipInput) {
   }
 
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+  await authorizeFamilyAction(userId, activeTree.id, "content.edit.direct");
 
   const result = await prisma.$transaction(async (tx) => {
     // 加载活跃图和当前修订号
     const [persons, relationships] = await Promise.all([
       tx.person.findMany({
-        where: activePersonInTree(userId, activeTree.id),
+        where: activePersonInTree(activeTree.id),
         select: { id: true, name: true, generationNumber: true },
       }),
       tx.relationship.findMany({
-        where: activeRelationshipInTree(userId, activeTree.id),
+        where: activeRelationshipInTree(activeTree.id),
         select: { type: true, personAId: true, personBId: true },
       }),
       getTreeRevision(tx as Parameters<typeof getTreeRevision>[0], activeTree.id),
@@ -221,20 +223,20 @@ export async function previewRelationshipDeletion(relationshipId: string) {
   }
 
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+  await authorizeFamilyAction(userId, activeTree.id, "content.delete");
 
   const relationship = await prisma.relationship.findUnique({
     where: { id: relationshipId, deletedAt: null },
     include: {
-      personA: { select: { id: true, name: true, createdBy: true, treeId: true } },
-      personB: { select: { id: true, name: true, createdBy: true, treeId: true } },
+      personA: { select: { id: true, name: true, treeId: true } },
+      personB: { select: { id: true, name: true, treeId: true } },
     },
   });
 
   if (
     !relationship ||
-    relationship.personA.createdBy !== userId ||
-    relationship.personB.createdBy !== userId ||
-    relationship.personA.treeId !== activeTree.id
+    relationship.personA.treeId !== activeTree.id ||
+    relationship.personB.treeId !== activeTree.id
   ) {
     throw new Error("无权操作");
   }
@@ -279,6 +281,7 @@ export async function deleteRelationship(confirmationId: string, relationshipId:
   }
 
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+  await authorizeFamilyAction(userId, activeTree.id, "content.delete");
 
   const result = await prisma.$transaction(async (tx) => {
     // 消耗确认
@@ -296,16 +299,15 @@ export async function deleteRelationship(confirmationId: string, relationshipId:
     const relationship = await tx.relationship.findUnique({
       where: { id: relationshipId, deletedAt: null },
       include: {
-        personA: { select: { createdBy: true, treeId: true } },
-        personB: { select: { createdBy: true, treeId: true } },
+        personA: { select: { treeId: true } },
+        personB: { select: { treeId: true } },
       },
     });
 
     if (
       !relationship ||
-      relationship.personA.createdBy !== userId ||
-      relationship.personB.createdBy !== userId ||
-      relationship.personA.treeId !== activeTree.id
+      relationship.personA.treeId !== activeTree.id ||
+      relationship.personB.treeId !== activeTree.id
     ) {
       throw new Error("无权操作");
     }

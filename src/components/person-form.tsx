@@ -613,7 +613,7 @@ export function PersonForm({ open, onClose, person }: PersonFormProps) {
       return;
     }
 
-    toast.success(isEdit ? "人物信息已更新" : "人物已添加");
+    toast.success(isEdit ? "人物修改草稿已创建" : "人物草稿已创建");
     router.refresh();
     onClose();
   }

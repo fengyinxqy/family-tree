@@ -5,6 +5,7 @@ import { deriveSiblingRelations, type DerivedSiblingRelation } from "@/lib/relat
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getActiveFamilyTreeForUser } from "@/services/family-tree-space.service";
+import { authorizeFamilyAction } from "@/services/family-authorization.service";
 import type { PersonEventData } from "@/types";
 
 
@@ -134,8 +135,9 @@ export async function getPersons() {
   }
 
   const activeTree = await getActiveFamilyTreeForUser(session.user.id, session.user.name);
+  await authorizeFamilyAction(session.user.id, activeTree.id, "family.read.published");
   return prisma.person.findMany({
-    where: { createdBy: session.user.id, treeId: activeTree.id, deletedAt: null },
+    where: { treeId: activeTree.id, deletedAt: null },
     include: { events: { orderBy: { sortOrder: "asc" } } },
     orderBy: { createdAt: "asc" },
   });
@@ -197,8 +199,10 @@ export async function getPerson(id: string): Promise<PersonDetailResult> {
     throw new Error("未登录");
   }
 
-  const person = await prisma.person.findUnique({
-    where: { id },
+  const activeTree = await getActiveFamilyTreeForUser(session.user.id, session.user.name);
+  await authorizeFamilyAction(session.user.id, activeTree.id, "family.read.published");
+  const person = await prisma.person.findFirst({
+    where: { id, treeId: activeTree.id, deletedAt: null },
     include: {
       events: { orderBy: { sortOrder: "asc" } },
       relationsA: {
@@ -218,7 +222,7 @@ export async function getPerson(id: string): Promise<PersonDetailResult> {
     },
   });
 
-  if (!person || person.createdBy !== session.user.id) {
+  if (!person) {
     throw new Error("人物不存在");
   }
 
@@ -259,6 +263,7 @@ export async function createPerson(input: CreatePersonInput) {
 
   const userId = session.user.id;
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user.name);
+  await authorizeFamilyAction(userId, activeTree.id, "content.edit.direct");
 
   if (input.events) {
     validateEvents(input.events);
@@ -309,8 +314,10 @@ export async function updatePerson(id: string, input: UpdatePersonInput) {
     throw new Error("未登录");
   }
 
-  const existing = await prisma.person.findUnique({ where: { id } });
-  if (!existing || existing.createdBy !== session.user.id) {
+  const activeTree = await getActiveFamilyTreeForUser(session.user.id, session.user.name);
+  await authorizeFamilyAction(session.user.id, activeTree.id, "content.edit.direct");
+  const existing = await prisma.person.findFirst({ where: { id, treeId: activeTree.id, deletedAt: null } });
+  if (!existing) {
     throw new Error("无权操作");
   }
 
@@ -371,12 +378,13 @@ export async function previewPersonDeletion(personId: string) {
   }
 
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+  await authorizeFamilyAction(userId, activeTree.id, "content.delete");
 
   const person = await prisma.person.findUnique({
     where: { id: personId, deletedAt: null },
   });
 
-  if (!person || person.createdBy !== userId || person.treeId !== activeTree.id) {
+  if (!person || person.treeId !== activeTree.id) {
     throw new Error("无权操作");
   }
 
@@ -440,6 +448,7 @@ export async function deletePerson(confirmationId: string, personId: string) {
   }
 
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+  await authorizeFamilyAction(userId, activeTree.id, "content.delete");
 
   await prisma.$transaction(async (tx) => {
     const currentRevision = await getTreeRevision(tx, activeTree.id);
@@ -456,7 +465,7 @@ export async function deletePerson(confirmationId: string, personId: string) {
       where: { id: personId, deletedAt: null },
     });
 
-    if (!person || person.createdBy !== userId || person.treeId !== activeTree.id) {
+    if (!person || person.treeId !== activeTree.id) {
       throw new Error("无权操作");
     }
 
@@ -525,6 +534,7 @@ export async function getRecoverableDeletionBatches() {
   }
 
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+  await authorizeFamilyAction(userId, activeTree.id, "recovery.read");
   return getDeletionBatches(prisma, activeTree.id);
 }
 
@@ -539,6 +549,7 @@ export async function restoreDeletionBatch(batchId: string) {
   }
 
   const activeTree = await getActiveFamilyTreeForUser(userId, session.user?.name);
+  await authorizeFamilyAction(userId, activeTree.id, "recovery.manage");
 
   await prisma.$transaction(async (tx) => {
     const batch = await tx.operationBatch.findUnique({
@@ -559,7 +570,7 @@ export async function restoreDeletionBatch(batchId: string) {
     }
 
     const treePersons = await tx.person.findMany({
-      where: activePersonInTree(userId, activeTree.id),
+      where: activePersonInTree(activeTree.id),
       select: { id: true },
     });
     const activePersonIds = new Set(treePersons.map((p) => p.id));
@@ -572,8 +583,8 @@ export async function restoreDeletionBatch(batchId: string) {
     const activeRelationships = await tx.relationship.findMany({
       where: {
         deletedAt: null,
-        personA: { deletedAt: null, createdBy: userId, treeId: activeTree.id },
-        personB: { deletedAt: null, createdBy: userId, treeId: activeTree.id },
+        personA: { deletedAt: null, treeId: activeTree.id },
+        personB: { deletedAt: null, treeId: activeTree.id },
       },
       select: { type: true, personAId: true, personBId: true },
     });

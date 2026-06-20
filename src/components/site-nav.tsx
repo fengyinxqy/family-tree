@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/ancestors", label: "祖先" },
   { href: "/events", label: "事件" },
   { href: "/documents", label: "文献" },
+  { href: "/reviews", label: "审校" },
   { href: "/albums", label: "相册" },
   { href: "/hall", label: "祠堂" },
   { href: "/settings", label: "设置" },

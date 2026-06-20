@@ -212,7 +212,7 @@ export function RelationshipForm({
         return;
       }
 
-      toast.success(`${relationTypeLabel(relationType)}关系已添加`);
+      toast.success(`${relationTypeLabel(relationType)}关系草稿已创建`);
       router.refresh();
       resetFormState();
       onClose();

@@ -51,7 +51,7 @@ export function MaterialDetailClient({ material, persons }: { material: DetailMa
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || `${file.name} 上传失败`);
       }
-      toast.success(`已上传 ${files.length} 个文件`);
+      toast.success(`已为 ${files.length} 个文件创建待审草稿`);
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "上传失败");
@@ -124,7 +124,7 @@ export function MaterialDetailClient({ material, persons }: { material: DetailMa
       const response = await fetch(`/api/materials/${material.id}/links`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targets: mapped }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "保存关联失败");
-      toast.success("资料关联已更新");
+      toast.success("资料关联修改草稿已创建");
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "保存关联失败");

@@ -1,4 +1,5 @@
-import { createMaterial, listMaterials } from "@/services/material.service";
+import { listMaterials } from "@/services/material.service";
+import { createContentDraft } from "@/services/editorial-revision.service";
 
 export async function GET(request: Request) {
   try {
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    return Response.json(await createMaterial(await request.json()), { status: 201 });
+    return Response.json(await createContentDraft({ contentType: "SOURCE_MATERIAL", payload: await request.json() }), { status: 202 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "创建资料失败";
     return Response.json({ error: message }, { status: message === "未登录" ? 401 : 400 });

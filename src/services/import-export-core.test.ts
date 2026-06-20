@@ -122,11 +122,11 @@ function createFakePrisma(initialState: State, options?: { failOnCreateMany?: bo
 
   const tx = {
     relationship: {
-      async deleteMany(args: { where: { personA: { createdBy: string; treeId: string } } }) {
-        const { createdBy, treeId } = args.where.personA;
+      async deleteMany(args: { where: { personA: { treeId: string } } }) {
+        const { treeId } = args.where.personA;
         const ownedPersonIds = new Set(
           state.persons
-            .filter((person) => person.createdBy === createdBy && person.treeId === treeId)
+            .filter((person) => person.treeId === treeId)
             .map((person) => person.id),
         );
         state.relationships = state.relationships.filter(
@@ -147,11 +147,11 @@ function createFakePrisma(initialState: State, options?: { failOnCreateMany?: bo
       },
     },
     personEvent: {
-      async deleteMany(args: { where: { person: { createdBy: string; treeId: string } } }) {
-        const { createdBy, treeId } = args.where.person;
+      async deleteMany(args: { where: { person: { treeId: string } } }) {
+        const { treeId } = args.where.person;
         const ownedPersonIds = new Set(
           state.persons
-            .filter((person) => person.createdBy === createdBy && person.treeId === treeId)
+            .filter((person) => person.treeId === treeId)
             .map((person) => person.id),
         );
         state.events = state.events.filter((event) => !ownedPersonIds.has(event.personId));
@@ -166,10 +166,8 @@ function createFakePrisma(initialState: State, options?: { failOnCreateMany?: bo
       },
     },
     person: {
-      async deleteMany(args: { where: { createdBy: string; treeId: string } }) {
-        state.persons = state.persons.filter(
-          (person) => person.createdBy !== args.where.createdBy || person.treeId !== args.where.treeId,
-        );
+      async deleteMany(args: { where: { treeId: string } }) {
+        state.persons = state.persons.filter((person) => person.treeId !== args.where.treeId);
       },
       async create(args: {
         data: Omit<State["persons"][number], "id">;
@@ -189,33 +187,25 @@ function createFakePrisma(initialState: State, options?: { failOnCreateMany?: bo
     state,
     prisma: {
       person: {
-        async findMany(args: { where: { createdBy: string; treeId: string } }) {
-          return state.persons.filter(
-            (person) => person.createdBy === args.where.createdBy && person.treeId === args.where.treeId,
-          );
+        async findMany(args: { where: { treeId: string } }) {
+          return state.persons.filter((person) => person.treeId === args.where.treeId);
         },
       },
       relationship: {
-        async findMany(args: { where: { personA: { createdBy: string; treeId: string } } }) {
+        async findMany(args: { where: { personA: { treeId: string } } }) {
           const ownedPersonIds = new Set(
             state.persons
-              .filter(
-                (person) =>
-                  person.createdBy === args.where.personA.createdBy && person.treeId === args.where.personA.treeId,
-              )
+              .filter((person) => person.treeId === args.where.personA.treeId)
               .map((person) => person.id),
           );
           return state.relationships.filter((relationship) => ownedPersonIds.has(relationship.personAId));
         },
       },
       personEvent: {
-        async findMany(args: { where: { person: { createdBy: string; treeId: string } } }) {
+        async findMany(args: { where: { person: { treeId: string } } }) {
           const ownedPersonIds = new Set(
             state.persons
-              .filter(
-                (person) =>
-                  person.createdBy === args.where.person.createdBy && person.treeId === args.where.person.treeId,
-              )
+              .filter((person) => person.treeId === args.where.person.treeId)
               .map((person) => person.id),
           );
           return state.events.filter((event) => ownedPersonIds.has(event.personId));

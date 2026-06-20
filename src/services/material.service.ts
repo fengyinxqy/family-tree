@@ -15,6 +15,8 @@ import { getActiveFamilyTreeForUser } from "@/services/family-tree-space.service
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import type { MaterialCategory } from "@/types";
+import type { FamilyAction } from "@/lib/family-access/actions";
+import { authorizeFamilyAction } from "@/services/family-authorization.service";
 
 type MaterialInput = {
   title: string;
@@ -25,10 +27,11 @@ type MaterialInput = {
   description?: string | null;
 };
 
-async function requireMaterialContext() {
+async function requireMaterialContext(action: FamilyAction = "family.read.published") {
   const session = await auth();
   if (!session?.user?.id) throw new Error("未登录");
   const tree = await getActiveFamilyTreeForUser(session.user.id, session.user.name);
+  await authorizeFamilyAction(session.user.id, tree.id, action);
   return { userId: session.user.id, treeId: tree.id };
 }
 
@@ -97,14 +100,13 @@ function toMaterialDto<T extends {
 }
 
 export async function listMaterials(input: { page?: number; pageSize?: number; q?: string; category?: string } = {}) {
-  const { userId, treeId } = await requireMaterialContext();
+  const { treeId } = await requireMaterialContext();
   const page = Math.max(1, input.page ?? 1);
   const pageSize = Math.min(50, Math.max(1, input.pageSize ?? 12));
   const category = input.category && input.category !== "all" ? materialInputSchema.shape.category.parse(input.category) : undefined;
   const q = input.q?.trim();
   const where = {
     treeId,
-    createdBy: userId,
     deletedAt: null,
     ...(category ? { category } : {}),
     ...(q
@@ -133,9 +135,9 @@ export async function listMaterials(input: { page?: number; pageSize?: number; q
 }
 
 export async function getMaterial(materialId: string) {
-  const { userId, treeId } = await requireMaterialContext();
+  const { treeId } = await requireMaterialContext();
   const material = await prisma.sourceMaterial.findFirst({
-    where: { id: materialId, treeId, createdBy: userId, deletedAt: null },
+    where: { id: materialId, treeId, deletedAt: null },
     include: materialInclude,
   });
   if (!material) throw new Error("资料不存在");
@@ -143,7 +145,7 @@ export async function getMaterial(materialId: string) {
 }
 
 export async function createMaterial(input: MaterialInput) {
-  const { userId, treeId } = await requireMaterialContext();
+  const { userId, treeId } = await requireMaterialContext("content.edit.direct");
   const data = materialInputSchema.parse(input);
   const material = await prisma.$transaction(async (tx) => {
     const created = await tx.sourceMaterial.create({ data: { ...data, treeId, createdBy: userId } });
@@ -161,9 +163,9 @@ export async function createMaterial(input: MaterialInput) {
 }
 
 export async function updateMaterial(materialId: string, input: MaterialInput) {
-  const { userId, treeId } = await requireMaterialContext();
+  const { userId, treeId } = await requireMaterialContext("content.edit.direct");
   const data = materialInputSchema.parse(input);
-  const existing = await prisma.sourceMaterial.findFirst({ where: { id: materialId, treeId, createdBy: userId, deletedAt: null } });
+  const existing = await prisma.sourceMaterial.findFirst({ where: { id: materialId, treeId, deletedAt: null } });
   if (!existing) throw new Error("资料不存在");
 
   await prisma.$transaction(async (tx) => {
@@ -182,8 +184,8 @@ export async function updateMaterial(materialId: string, input: MaterialInput) {
 }
 
 export async function replaceMaterialLinks(materialId: string, targets: MaterialLinkTarget[]) {
-  const { userId, treeId } = await requireMaterialContext();
-  const material = await prisma.sourceMaterial.findFirst({ where: { id: materialId, treeId, createdBy: userId, deletedAt: null } });
+  const { userId, treeId } = await requireMaterialContext("content.edit.direct");
+  const material = await prisma.sourceMaterial.findFirst({ where: { id: materialId, treeId, deletedAt: null } });
   if (!material) throw new Error("资料不存在");
 
   const personIds = targets.flatMap((target) => (target.personId ? [target.personId] : []));
@@ -212,8 +214,8 @@ export async function replaceMaterialLinks(materialId: string, targets: Material
 }
 
 export async function attachMaterialFile(materialId: string, file: File) {
-  const { userId, treeId } = await requireMaterialContext();
-  const material = await prisma.sourceMaterial.findFirst({ where: { id: materialId, treeId, createdBy: userId, deletedAt: null }, include: { _count: { select: { files: { where: { deletedAt: null } } } } } });
+  const { userId, treeId } = await requireMaterialContext("file.manage");
+  const material = await prisma.sourceMaterial.findFirst({ where: { id: materialId, treeId, deletedAt: null }, include: { _count: { select: { files: { where: { deletedAt: null } } } } } });
   if (!material) throw new Error("资料不存在");
   if (material._count.files >= getFileLimits().maxFiles) throw new Error("资料包含的文件数量已达上限");
 
@@ -246,8 +248,8 @@ export async function attachMaterialFile(materialId: string, file: File) {
 }
 
 export async function reorderMaterialFiles(materialId: string, fileIds: string[]) {
-  const { userId, treeId } = await requireMaterialContext();
-  const material = await prisma.sourceMaterial.findFirst({ where: { id: materialId, treeId, createdBy: userId, deletedAt: null }, include: { files: { where: { deletedAt: null }, select: { id: true } } } });
+  const { userId, treeId } = await requireMaterialContext("file.manage");
+  const material = await prisma.sourceMaterial.findFirst({ where: { id: materialId, treeId, deletedAt: null }, include: { files: { where: { deletedAt: null }, select: { id: true } } } });
   if (!material) throw new Error("资料不存在");
   const existingIds = new Set(material.files.map((file) => file.id));
   if (fileIds.length !== existingIds.size || new Set(fileIds).size !== fileIds.length || fileIds.some((id) => !existingIds.has(id))) throw new Error("文件排序列表不完整");
@@ -261,12 +263,12 @@ export async function reorderMaterialFiles(materialId: string, fileIds: string[]
 }
 
 export async function deleteMaterialFile(fileId: string) {
-  const { userId, treeId } = await requireMaterialContext();
+  const { userId, treeId } = await requireMaterialContext("file.manage");
   const file = await prisma.mediaObject.findFirst({
     where: {
       id: fileId,
       deletedAt: null,
-      material: { treeId, createdBy: userId, deletedAt: null },
+      material: { treeId, deletedAt: null },
     },
     include: { material: { select: { id: true, title: true } } },
   });
@@ -314,8 +316,8 @@ export async function deleteMaterialFile(fileId: string) {
 }
 
 export async function previewMaterialDeletion(materialId: string) {
-  const { userId, treeId } = await requireMaterialContext();
-  const material = await prisma.sourceMaterial.findFirst({ where: { id: materialId, treeId, createdBy: userId, deletedAt: null }, include: { files: { where: { deletedAt: null }, select: { id: true } }, links: { where: { deletedAt: null }, select: { id: true } } } });
+  const { userId, treeId } = await requireMaterialContext("content.delete");
+  const material = await prisma.sourceMaterial.findFirst({ where: { id: materialId, treeId, deletedAt: null }, include: { files: { where: { deletedAt: null }, select: { id: true } }, links: { where: { deletedAt: null }, select: { id: true } } } });
   if (!material) throw new Error("资料不存在");
   const revision = await getTreeRevision(prisma, treeId);
   const preview = { material: { id: material.id, title: material.title }, affected: { fileCount: material.files.length, linkCount: material.links.length }, revision };
@@ -324,11 +326,11 @@ export async function previewMaterialDeletion(materialId: string) {
 }
 
 export async function deleteMaterial(confirmationId: string, materialId: string) {
-  const { userId, treeId } = await requireMaterialContext();
+  const { userId, treeId } = await requireMaterialContext("content.delete");
   await prisma.$transaction(async (tx) => {
     const revision = await getTreeRevision(tx, treeId);
     await consumeConfirmation(tx, { confirmationId, treeId, userId, kind: "material_delete", input: { materialId }, currentRevision: revision });
-    const material = await tx.sourceMaterial.findFirst({ where: { id: materialId, treeId, createdBy: userId, deletedAt: null }, include: { files: { where: { deletedAt: null } }, links: { where: { deletedAt: null } } } });
+    const material = await tx.sourceMaterial.findFirst({ where: { id: materialId, treeId, deletedAt: null }, include: { files: { where: { deletedAt: null } }, links: { where: { deletedAt: null } } } });
     if (!material) throw new Error("资料不存在");
     const now = new Date();
     const batch = await createAuditBatch(tx, {
@@ -352,7 +354,7 @@ export async function deleteMaterial(confirmationId: string, materialId: string)
 }
 
 export async function restoreMaterialDeletion(batchId: string) {
-  const { userId, treeId } = await requireMaterialContext();
+  const { userId, treeId } = await requireMaterialContext("recovery.manage");
   const batch = await prisma.operationBatch.findFirst({ where: { id: batchId, treeId, action: "material_delete", status: "complete" }, include: { entries: true } });
   if (!batch) throw new Error("资料删除批次不存在或不可恢复");
   const materialEntry = batch.entries.find((entry) => entry.entityType === "source_material");
@@ -377,8 +379,8 @@ export async function restoreMaterialDeletion(batchId: string) {
 }
 
 export async function getAuthorizedMediaObject(fileId: string) {
-  const { userId, treeId } = await requireMaterialContext();
-  const file = await prisma.mediaObject.findFirst({ where: { id: fileId, deletedAt: null, material: { treeId, createdBy: userId, deletedAt: null } } });
+  const { treeId } = await requireMaterialContext();
+  const file = await prisma.mediaObject.findFirst({ where: { id: fileId, deletedAt: null, material: { treeId, deletedAt: null } } });
   if (!file) throw new Error("文件不存在");
   return file;
 }

@@ -7,9 +7,9 @@ type TxClient = Omit<
 >;
 
 interface AuditEntryData {
-  entityType: "person" | "relationship" | "person_event" | "snapshot" | "source_material" | "media_object" | "material_link";
+  entityType: "person" | "relationship" | "person_event" | "snapshot" | "source_material" | "media_object" | "material_link" | "family_invitation" | "family_membership" | "family_tree" | "content_revision" | "review_decision";
   entityId: string;
-  action: "create" | "update" | "delete" | "restore" | "snapshot_create";
+  action: "create" | "update" | "delete" | "restore" | "snapshot_create" | "invite" | "accept" | "revoke" | "role_change" | "suspend" | "reactivate" | "remove" | "ownership_transfer" | "submit" | "review" | "publish" | "withdraw";
   beforeJson?: Prisma.InputJsonValue | null;
   afterJson?: Prisma.InputJsonValue | null;
 }
@@ -21,6 +21,7 @@ interface AuditBatchParams {
   status?: string;
   summary?: Prisma.InputJsonValue;
   entries: AuditEntryData[];
+  incrementFamilyRevision?: boolean;
 }
 
 export interface AuditBatchResult {
@@ -36,10 +37,12 @@ export async function createAuditBatch(
   params: AuditBatchParams,
 ): Promise<AuditBatchResult> {
   // 递增多修订号
-  await tx.familyTree.update({
-    where: { id: params.treeId },
-    data: { dataRevision: { increment: 1 } },
-  });
+  if (params.incrementFamilyRevision !== false) {
+    await tx.familyTree.update({
+      where: { id: params.treeId },
+      data: { dataRevision: { increment: 1 } },
+    });
+  }
 
   // 创建操作批次
   const batch = await tx.operationBatch.create({

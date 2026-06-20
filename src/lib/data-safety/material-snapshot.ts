@@ -25,7 +25,7 @@ export type MaterialSnapshotDocument = z.infer<typeof materialSnapshotSchema>;
 
 export async function buildMaterialSnapshotDocument(userId: string, treeId: string, backup: FamilyBackupDocument): Promise<MaterialSnapshotDocument> {
   const materials = await prisma.sourceMaterial.findMany({
-    where: { treeId, createdBy: userId, deletedAt: null },
+    where: { treeId, deletedAt: null },
     include: { files: { where: { deletedAt: null } }, links: { where: { deletedAt: null } } },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   });

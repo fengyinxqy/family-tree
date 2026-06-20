@@ -1,18 +1,21 @@
 import { prisma } from "@/lib/prisma";
+import { authorizeFamilyAction } from "@/services/family-authorization.service";
 import type { IntakeDraft, IntakeExtraction, ExistingPersonContext } from "./types";
 import { intakeDraftSchema } from "./schemas";
 import { syncGenerationNumbersForComponent } from "@/services/relationship.service";
 
 export async function getUserGenealogyContext(userId: string, treeId: string) {
+  await authorizeFamilyAction(userId, treeId, "family.read.workspace");
   const [persons, relationships] = await Promise.all([
     prisma.person.findMany({
-      where: { createdBy: userId, treeId },
+      where: { treeId, deletedAt: null },
       orderBy: { createdAt: "asc" },
     }),
     prisma.relationship.findMany({
       where: {
-        personA: { createdBy: userId, treeId },
-        personB: { createdBy: userId, treeId },
+        personA: { treeId, deletedAt: null },
+        personB: { treeId, deletedAt: null },
+        deletedAt: null,
       },
       orderBy: { createdAt: "asc" },
     }),
@@ -597,6 +600,7 @@ export function mergeDraftWithClarification(
 }
 
 export async function applyIntakeDraft(userId: string, treeId: string, draftInput: IntakeDraft) {
+  await authorizeFamilyAction(userId, treeId, "content.edit.direct");
   const draft = intakeDraftSchema.parse(draftInput);
   const refToPersonId = new Map<string, string>();
 
@@ -607,7 +611,7 @@ export async function applyIntakeDraft(userId: string, treeId: string, draftInpu
           where: { id: person.existingPersonId },
         });
 
-        if (!existingPerson || existingPerson.createdBy !== userId || existingPerson.treeId !== treeId) {
+        if (!existingPerson || existingPerson.treeId !== treeId || existingPerson.deletedAt) {
           throw new Error(`Person ${person.name} cannot be reused by this user.`);
         }
 

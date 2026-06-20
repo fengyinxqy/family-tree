@@ -7,35 +7,197 @@ datasource db {
 }
 
 model User {
-  id              String           @id @default(cuid())
-  email           String           @unique
-  name            String
-  passwordHash    String           @map("password_hash")
-  createdAt       DateTime         @default(now()) @map("created_at")
-  persons         Person[]
-  familyTrees     FamilyTree[]
-  sourceMaterials SourceMaterial[]
+  id                        String              @id @default(cuid())
+  email                     String              @unique
+  name                      String
+  passwordHash              String              @map("password_hash")
+  createdAt                 DateTime            @default(now()) @map("created_at")
+  persons                   Person[]
+  familyTrees               FamilyTree[]
+  sourceMaterials           SourceMaterial[]
+  familyMemberships         FamilyMembership[]
+  sentFamilyInvitations     FamilyInvitation[]  @relation("FamilyInvitationInviter")
+  acceptedFamilyInvitations FamilyInvitation[]  @relation("FamilyInvitationAcceptor")
+  authoredContentRevisions  ContentRevision[]   @relation("ContentRevisionAuthor")
+  publishedContentRevisions ContentRevision[]   @relation("ContentRevisionPublisher")
+  reviewDecisions           ReviewDecision[]
+  stagedMediaUploads        StagedMediaUpload[]
 
   @@map("users")
 }
 
 model FamilyTree {
-  id               String                  @id @default(cuid())
-  name             String
-  description      String?
-  ownerId          String                  @map("owner_id")
-  owner            User                    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  persons          Person[]
-  dataRevision     Int                     @default(0) @map("data_revision")
-  createdAt        DateTime                @default(now()) @map("created_at")
-  updatedAt        DateTime                @updatedAt @map("updated_at")
-  operationBatches OperationBatch[]
-  confirmations    OperationConfirmation[]
-  snapshots        FamilySnapshot[]
-  sourceMaterials  SourceMaterial[]
+  id                 String                  @id @default(cuid())
+  name               String
+  description        String?
+  ownerId            String                  @map("owner_id")
+  owner              User                    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  persons            Person[]
+  dataRevision       Int                     @default(0) @map("data_revision")
+  createdAt          DateTime                @default(now()) @map("created_at")
+  updatedAt          DateTime                @updatedAt @map("updated_at")
+  operationBatches   OperationBatch[]
+  confirmations      OperationConfirmation[]
+  snapshots          FamilySnapshot[]
+  sourceMaterials    SourceMaterial[]
+  memberships        FamilyMembership[]
+  invitations        FamilyInvitation[]
+  contentRevisions   ContentRevision[]
+  stagedMediaUploads StagedMediaUpload[]
 
   @@index([ownerId, createdAt], map: "idx_family_trees_owner_created")
   @@map("family_trees")
+}
+
+enum FamilyRole {
+  OWNER
+  ADMIN
+  EDITOR
+  REVIEWER
+  VIEWER
+}
+
+enum FamilyMembershipStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum FamilyInvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+}
+
+model FamilyMembership {
+  id        String                 @id @default(cuid())
+  treeId    String                 @map("tree_id")
+  tree      FamilyTree             @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  userId    String                 @map("user_id")
+  user      User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      FamilyRole
+  status    FamilyMembershipStatus @default(ACTIVE)
+  joinedAt  DateTime               @default(now()) @map("joined_at")
+  updatedAt DateTime               @updatedAt @map("updated_at")
+
+  @@unique([treeId, userId], map: "uq_family_memberships_tree_user")
+  @@index([userId, status], map: "idx_family_memberships_user_status")
+  @@index([treeId, role, status], map: "idx_family_memberships_tree_role_status")
+  @@map("family_memberships")
+}
+
+model FamilyInvitation {
+  id             String                 @id @default(cuid())
+  treeId         String                 @map("tree_id")
+  tree           FamilyTree             @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  email          String
+  role           FamilyRole
+  tokenHash      String                 @unique @map("token_hash")
+  status         FamilyInvitationStatus @default(PENDING)
+  expiresAt      DateTime               @map("expires_at")
+  invitedBy      String                 @map("invited_by")
+  inviter        User                   @relation("FamilyInvitationInviter", fields: [invitedBy], references: [id], onDelete: Restrict)
+  acceptedBy     String?                @map("accepted_by")
+  acceptedByUser User?                  @relation("FamilyInvitationAcceptor", fields: [acceptedBy], references: [id], onDelete: SetNull)
+  acceptedAt     DateTime?              @map("accepted_at")
+  revokedAt      DateTime?              @map("revoked_at")
+  createdAt      DateTime               @default(now()) @map("created_at")
+
+  @@index([treeId, status, createdAt], map: "idx_family_invitations_tree_status_created")
+  @@index([email, status, expiresAt], map: "idx_family_invitations_email_status_expiry")
+  @@map("family_invitations")
+}
+
+enum RevisionContentType {
+  PERSON
+  PERSON_EVENT
+  RELATIONSHIP
+  SOURCE_MATERIAL
+  MEDIA_OBJECT
+  MATERIAL_LINK
+  IMPORT_BATCH
+}
+
+enum ContentRevisionStatus {
+  DRAFT
+  IN_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  PUBLISHED
+}
+
+enum ReviewDecisionType {
+  APPROVED
+  CHANGES_REQUESTED
+}
+
+model ContentRevision {
+  id                  String                @id @default(cuid())
+  treeId              String                @map("tree_id")
+  tree                FamilyTree            @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  contentType         RevisionContentType   @map("content_type")
+  targetEntityId      String?               @map("target_entity_id")
+  authorId            String                @map("author_id")
+  author              User                  @relation("ContentRevisionAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  parentRevisionId    String?               @map("parent_revision_id")
+  parentRevision      ContentRevision?      @relation("RevisionHistory", fields: [parentRevisionId], references: [id], onDelete: SetNull)
+  derivedRevisions    ContentRevision[]     @relation("RevisionHistory")
+  baseFamilyRevision  Int                   @map("base_family_revision")
+  baseTargetUpdatedAt DateTime?             @map("base_target_updated_at")
+  schemaVersion       Int                   @default(1) @map("schema_version")
+  version             Int                   @default(1)
+  status              ContentRevisionStatus @default(DRAFT)
+  payload             Json
+  submittedAt         DateTime?             @map("submitted_at")
+  approvedAt          DateTime?             @map("approved_at")
+  publishedAt         DateTime?             @map("published_at")
+  publishedBy         String?               @map("published_by")
+  publisher           User?                 @relation("ContentRevisionPublisher", fields: [publishedBy], references: [id], onDelete: SetNull)
+  publishOperationId  String?               @map("publish_operation_id")
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @updatedAt @map("updated_at")
+  reviewDecisions     ReviewDecision[]
+
+  @@index([treeId, status, submittedAt], map: "idx_content_revisions_review_queue")
+  @@index([treeId, contentType, targetEntityId, createdAt], map: "idx_content_revisions_target_history")
+  @@index([authorId, status, updatedAt], map: "idx_content_revisions_author_status")
+  @@index([parentRevisionId], map: "idx_content_revisions_parent")
+  @@map("content_revisions")
+}
+
+model ReviewDecision {
+  id             String             @id @default(cuid())
+  revisionId     String             @map("revision_id")
+  revision       ContentRevision    @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  reviewerId     String             @map("reviewer_id")
+  reviewer       User               @relation(fields: [reviewerId], references: [id], onDelete: Restrict)
+  decision       ReviewDecisionType
+  comment        String?
+  overrideReason String?            @map("override_reason")
+  createdAt      DateTime           @default(now()) @map("created_at")
+
+  @@index([revisionId, createdAt], map: "idx_review_decisions_revision_created")
+  @@index([reviewerId, createdAt], map: "idx_review_decisions_reviewer_created")
+  @@map("review_decisions")
+}
+
+model StagedMediaUpload {
+  id           String     @id @default(cuid())
+  treeId       String     @map("tree_id")
+  tree         FamilyTree @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  uploadedBy   String     @map("uploaded_by")
+  uploader     User       @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+  temporaryKey String     @unique @map("temporary_key")
+  originalName String     @map("original_name")
+  mimeType     String     @map("mime_type")
+  byteSize     Int        @map("byte_size")
+  contentHash  String     @map("content_hash")
+  expiresAt    DateTime   @map("expires_at")
+  consumedAt   DateTime?  @map("consumed_at")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@index([treeId, consumedAt, expiresAt], map: "idx_staged_media_uploads_tree_state")
+  @@index([uploadedBy, createdAt], map: "idx_staged_media_uploads_uploader_created")
+  @@map("staged_media_uploads")
 }
 
 model Person {

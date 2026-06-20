@@ -31,7 +31,7 @@ export default function NewPersonPage() {
       return;
     }
 
-    toast.success("人物已添加");
+    toast.success("人物草稿已创建");
     router.push("/tree");
   }
 

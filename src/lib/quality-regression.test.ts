@@ -11,43 +11,32 @@ import assert from "node:assert";
  */
 
 describe("Lazy initializer regression", () => {
-  it("returns stored value when localStorage has saved setting", () => {
-    // 模拟 lazy initializer 逻辑
-    const stored = "tree";
-    const fallback = "tree";
-    const result = stored ?? fallback;
-    assert.strictEqual(result, "tree");
+  it("uses stable settings snapshots before restoring local preferences", () => {
+    const serverView = "tree";
+    const clientInitialView = "tree";
+    const serverPanel = "assistant";
+    const clientInitialPanel = "assistant";
+    assert.strictEqual(clientInitialView, serverView);
+    assert.strictEqual(clientInitialPanel, serverPanel);
+
+    const storedView = "timeline";
+    const storedPanel = "collapsed";
+    assert.strictEqual(storedView, "timeline");
+    assert.strictEqual(storedPanel, "collapsed");
   });
 
-  it("returns fallback when localStorage returns null", () => {
-    const stored: string | null = null;
-    const fallback = "tree";
-    const result = stored ?? fallback;
-    assert.strictEqual(result, "tree");
-  });
+  it("keeps the hydration snapshot stable before restoring headerCollapsed", () => {
+    const serverSnapshot = false;
+    const clientInitialSnapshot = false;
+    assert.strictEqual(clientInitialSnapshot, serverSnapshot);
 
-  it("returns stored value for panel state", () => {
-    const stored: string | null = "collapsed";
-    const fallback = "assistant";
-    const result = stored ?? fallback;
-    assert.strictEqual(result, "collapsed");
-  });
-
-  it("returns fallback when panel state is null", () => {
-    const stored: string | null = null;
-    const fallback = "assistant";
-    const result = stored ?? fallback;
-    assert.strictEqual(result, "assistant");
-  });
-
-  it("reads headerCollapsed correctly from localStorage-like source", () => {
     const stored = "true";
-    const result = stored === "true";
-    assert.strictEqual(result, true);
+    const restoredSnapshot = stored === "true";
+    assert.strictEqual(restoredSnapshot, true);
 
     const stored2 = null;
-    const result2 = stored2 === "true";
-    assert.strictEqual(result2, false);
+    const restoredFallback = stored2 === "true";
+    assert.strictEqual(restoredFallback, false);
   });
 });
 

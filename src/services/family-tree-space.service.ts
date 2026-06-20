@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { authorizeFamilyAction } from "@/services/family-authorization.service";
 
 const ACTIVE_TREE_COOKIE = "family.active_tree_id";
 
@@ -55,7 +56,7 @@ async function writeActiveTreeCookie(treeId: string) {
 
 export async function ensureDefaultFamilyTreeForUser(userId: string, userName?: string | null) {
   const existing = await prisma.familyTree.findFirst({
-    where: { ownerId: userId },
+    where: { memberships: { some: { userId, status: "ACTIVE" } } },
     orderBy: { createdAt: "asc" },
   });
 
@@ -68,6 +69,7 @@ export async function ensureDefaultFamilyTreeForUser(userId: string, userName?: 
       name: defaultTreeName(userName),
       description: "默认家谱空间",
       ownerId: userId,
+      memberships: { create: { userId, role: "OWNER" } },
     },
   });
 }
@@ -79,7 +81,7 @@ export async function getActiveFamilyTreeForUser(userId: string, userName?: stri
     const active = await prisma.familyTree.findFirst({
       where: {
         id: activeTreeId,
-        ownerId: userId,
+        memberships: { some: { userId, status: "ACTIVE" } },
       },
     });
 
@@ -110,7 +112,7 @@ export async function getFamilyTreeSpacesForCurrentUser(): Promise<FamilyTreeSpa
   await ensureDefaultFamilyTreeForUser(user.id, user.name);
 
   const spaces = await prisma.familyTree.findMany({
-    where: { ownerId: user.id },
+    where: { memberships: { some: { userId: user.id, status: "ACTIVE" } } },
     include: {
       _count: {
         select: { persons: true },
@@ -142,6 +144,7 @@ export async function createFamilyTreeSpace(formData: FormData) {
       name: rawName.slice(0, 40),
       description: rawDescription ? rawDescription.slice(0, 120) : null,
       ownerId: user.id,
+      memberships: { create: { userId: user.id, role: "OWNER" } },
     },
   });
 
@@ -151,10 +154,10 @@ export async function createFamilyTreeSpace(formData: FormData) {
 
 export async function switchFamilyTreeSpace(treeId: string) {
   const user = await requireUser();
+  await authorizeFamilyAction(user.id, treeId, "family.read.published");
   const tree = await prisma.familyTree.findFirst({
     where: {
       id: treeId,
-      ownerId: user.id,
     },
     select: { id: true },
   });
@@ -169,11 +172,11 @@ export async function switchFamilyTreeSpace(treeId: string) {
 
 export async function deleteFamilyTreeSpace(treeId: string) {
   const user = await requireUser();
+  await authorizeFamilyAction(user.id, treeId, "family.delete");
 
   const tree = await prisma.familyTree.findFirst({
     where: {
       id: treeId,
-      ownerId: user.id,
     },
     select: { id: true },
   });

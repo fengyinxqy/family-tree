@@ -19,7 +19,7 @@ export async function getFamilyWorkspaceData(): Promise<FamilyWorkspaceData> {
   const activeTree = await getActiveFamilyTreeForUser(session.user.id, session.user.name);
   const [persons, relationships] = await Promise.all([
     prisma.person.findMany({
-      where: { createdBy: session.user.id, treeId: activeTree.id, deletedAt: null },
+      where: { treeId: activeTree.id, deletedAt: null },
       include: {
         events: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
       },
@@ -28,8 +28,8 @@ export async function getFamilyWorkspaceData(): Promise<FamilyWorkspaceData> {
     prisma.relationship.findMany({
       where: {
         deletedAt: null,
-        personA: { createdBy: session.user.id, treeId: activeTree.id, deletedAt: null },
-        personB: { createdBy: session.user.id, treeId: activeTree.id, deletedAt: null },
+        personA: { treeId: activeTree.id, deletedAt: null },
+        personB: { treeId: activeTree.id, deletedAt: null },
       },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     }),

@@ -66,9 +66,9 @@ interface SnapshotItem {
   createdAt: Date;
 }
 
-export function SettingsClient() {
-  const [defaultView, setDefaultView] = useState<DefaultView>(() => { if (typeof window !== "undefined") { return (window.localStorage.getItem("family.workspace.defaultView") as DefaultView | null) ?? "tree"; } return "tree"; });
-  const [panelState, setPanelState] = useState<PanelState>(() => { if (typeof window !== "undefined") { return (window.localStorage.getItem("family.workspace.panel") as PanelState | null) ?? "assistant"; } return "assistant"; });
+export function SettingsClient({ canManageRecovery }: { canManageRecovery: boolean }) {
+  const [defaultView, setDefaultView] = useState<DefaultView>("tree");
+  const [panelState, setPanelState] = useState<PanelState>("assistant");
 
   const [deletionBatches, setDeletionBatches] = useState<DeletionBatch[]>([]);
   const [loadingBatches, setLoadingBatches] = useState(false);
@@ -116,10 +116,18 @@ export function SettingsClient() {
   }, []);
 
   useEffect(() => {
-    loadDeletionBatches();
-    loadSnapshots();
-    loadOpHistory(1);
-  }, [loadDeletionBatches, loadSnapshots, loadOpHistory]);
+    const storedView = window.localStorage.getItem("family.workspace.defaultView");
+    const storedPanel = window.localStorage.getItem("family.workspace.panel");
+    queueMicrotask(() => {
+      if (VIEW_OPTIONS.some((option) => option.value === storedView)) setDefaultView(storedView as DefaultView);
+      if (storedPanel === "assistant" || storedPanel === "collapsed") setPanelState(storedPanel);
+    });
+    if (canManageRecovery) {
+      loadDeletionBatches();
+      loadSnapshots();
+      loadOpHistory(1);
+    }
+  }, [canManageRecovery, loadDeletionBatches, loadSnapshots, loadOpHistory]);
 
   async function handleRestoreBatch(batchId: string) {
     setRestoringBatchId(batchId);
@@ -196,6 +204,7 @@ export function SettingsClient() {
           </div>
         </div>
       </AppPanel>
+      {canManageRecovery ? <>
       <AppPanel className="p-1.5 xl:col-span-2">
         <div className="rounded-[1.5rem] border border-border/70 bg-background/82 p-6">
           <div className="flex items-start justify-between gap-3">
@@ -309,6 +318,14 @@ export function SettingsClient() {
           </div>
         </div>
       </AppPanel>
+      </> : (
+        <AppPanel className="p-1.5 xl:col-span-2">
+          <div className="rounded-[1.5rem] border border-border/70 bg-background/82 p-6">
+            <h2 className="text-xl font-semibold text-foreground">所有者工具</h2>
+            <p className="mt-2 text-sm text-muted-foreground">数据恢复、快照和操作审计仅家族所有者可用。</p>
+          </div>
+        </AppPanel>
+      )}
       <AppPanel className="p-1.5 xl:col-span-2">
         <div className="rounded-[1.5rem] border border-border/70 bg-background/82 p-6">
           <div className="flex items-center gap-3">

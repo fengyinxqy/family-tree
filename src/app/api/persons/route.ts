@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { createPerson, getPersons } from "@/services/person.service";
+import { getPersons } from "@/services/person.service";
+import { createContentDraft } from "@/services/editorial-revision.service";
 
 export async function GET() {
   const session = await auth();
@@ -18,21 +19,26 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const person = await createPerson({
-      name: body.name,
-      gender: body.gender,
-      birthDate: body.birthDate ?? null,
-      deathDate: body.deathDate ?? null,
-      bio: body.bio ?? null,
-      aliases: body.aliases ?? [],
-      generationNumber: body.generationNumber ?? 1,
-      generationLabel: body.generationLabel ?? null,
-      nativePlace: body.nativePlace ?? null,
-      notes: body.notes ?? null,
-      events: body.events ?? [],
+    const person = await createContentDraft({
+      contentType: "PERSON",
+      payload: {
+        name: body.name,
+        gender: body.gender,
+        birthDate: body.birthDate ?? null,
+        deathDate: body.deathDate ?? null,
+        bio: body.bio ?? null,
+        aliases: body.aliases ?? [],
+        generationNumber: body.generationNumber ?? 1,
+        generationLabel: body.generationLabel ?? null,
+        nativePlace: body.nativePlace ?? null,
+        notes: body.notes ?? null,
+        posX: null,
+        posY: null,
+        events: body.events ?? [],
+      },
     });
 
-    return NextResponse.json(person, { status: 201 });
+    return NextResponse.json(person, { status: 202 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "创建失败";
     return NextResponse.json({ error: message }, { status: 400 });

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { createRelationship } from "@/services/relationship.service";
+import { createContentDraft } from "@/services/editorial-revision.service";
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -12,15 +12,12 @@ export async function POST(request: Request) {
   const { type, personAId, personBId, sortOrder, label } = body;
 
   try {
-    const relationship = await createRelationship({
-      type,
-      personAId,
-      personBId,
-      sortOrder,
-      label,
+    const relationship = await createContentDraft({
+      contentType: "RELATIONSHIP",
+      payload: { type, personAId, personBId, sortOrder: sortOrder ?? 0, label: label ?? null },
     });
 
-    return NextResponse.json(relationship, { status: 201 });
+    return NextResponse.json(relationship, { status: 202 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "添加关系失败";
     const status =

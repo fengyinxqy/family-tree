@@ -80,7 +80,7 @@ export function DocumentsClient() {
       const response = await fetch(url, { method: editing === "new" ? "POST" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "保存失败");
-      toast.success(editing === "new" ? "资料已创建" : "资料已更新");
+      toast.success(editing === "new" ? "资料草稿已创建" : "资料修改草稿已创建");
       setEditing(null);
       await load();
     } catch (saveError) {
