@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bot,
@@ -31,6 +31,7 @@ import {
   buildSuggestionChips,
   buildSuggestionHints,
 } from "@/lib/family-graph";
+import { presentAgentArtifact } from "@/lib/agent/runtime/artifact-presentation";
 import type { IntakeDraft } from "@/lib/agent/types";
 import type { RelationshipData, WorkspacePersonData } from "@/types";
 
@@ -74,7 +75,24 @@ type AgentStreamEvent =
       relationshipResult?: RelationshipAgentResponse;
     }
   | { type: "done" }
-  | { type: "error"; error: string };
+  | { type: "error"; error?: string; message?: string }
+  | { type: "text_delta"; runId: string; content: string }
+  | { type: "step"; runId: string; node: string; status: string }
+  | { type: "tool"; runId: string; tool: string; status: string }
+  | { type: "artifact"; runId: string; artifact: unknown }
+  | { type: "interruption"; runId: string; interruption: RuntimeInterruption }
+  | { type: "done"; runId: string; reason: string };
+
+interface RuntimeInterruption {
+  kind: "CLARIFICATION" | "CONFIRMATION";
+  reason: string;
+  question: string;
+  options: Array<{ value: string; label: string }>;
+  pendingTool?: { name: string; argumentsHash: string; summary: string };
+  expiresAt: string;
+}
+
+const runtimeEnabled = process.env.NEXT_PUBLIC_AGENT_RUNTIME_ENABLED === "true";
 
 function MessageLog({ messages, busyLabel }: { messages: AgentMessage[]; busyLabel: string | null }) {
   return (
@@ -273,6 +291,10 @@ export function AgentPanel({
   const [draft, setDraft] = useState<IntakeDraft | null>(null);
   const [draftSourceText, setDraftSourceText] = useState("");
   const [relationshipResult, setRelationshipResult] = useState<RelationshipAgentResponse | null>(null);
+  const [runtimeSessionId, setRuntimeSessionId] = useState<string | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [runStatus, setRunStatus] = useState<string | null>(null);
+  const [interruption, setInterruption] = useState<RuntimeInterruption | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([
     {
       id: "assistant-welcome",
@@ -284,6 +306,47 @@ export function AgentPanel({
   const [isSubmitting, startSubmitting] = useTransition();
   const [isApplying, startApplying] = useTransition();
   const messageIdCounter = useRef(0);
+
+  useEffect(() => {
+    if (!runtimeEnabled) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/agent/sessions");
+        if (!response.ok) return;
+        const data = await response.json() as { sessions?: Array<{ id: string }> };
+        const latest = data.sessions?.[0];
+        if (!latest || cancelled) return;
+        setRuntimeSessionId(latest.id);
+        const detailResponse = await fetch(`/api/agent/sessions/${latest.id}`);
+        if (!detailResponse.ok || cancelled) return;
+        const detail = await detailResponse.json() as {
+          session?: {
+            messages?: Array<{ id: string; role: string; content: string }>;
+            currentRun?: { id: string; status: string; interruption?: RuntimeInterruption | null } | null;
+          };
+        };
+        const persisted = detail.session?.messages ?? [];
+        if (persisted.length > 0) {
+          setMessages(persisted.filter((item) => item.role === "USER" || item.role === "ASSISTANT").map((item) => ({
+            id: item.id,
+            role: item.role === "USER" ? "user" : "assistant",
+            title: item.role === "USER" ? "你" : "谱小助",
+            body: item.content,
+          })));
+        }
+        const currentRun = detail.session?.currentRun;
+        if (currentRun) {
+          setActiveRunId(currentRun.id);
+          setRunStatus(currentRun.status);
+          setInterruption(currentRun.interruption ?? null);
+        }
+      } catch {
+        // 会话恢复失败不阻止用户开始新会话。
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const suggestionChips = useMemo(() => buildSuggestionChips(selectedPerson), [selectedPerson]);
   const suggestionHints = useMemo(
@@ -322,7 +385,7 @@ export function AgentPanel({
     const handleLine = (line: string) => {
       const event = JSON.parse(line) as AgentStreamEvent;
 
-      if (event.type === "delta") {
+      if (event.type === "delta" || event.type === "text_delta") {
         updateMessageBody(assistantMessageId, (body) => body + event.content);
         return;
       }
@@ -337,8 +400,37 @@ export function AgentPanel({
         return;
       }
 
+      if (event.type === "artifact") {
+        const presented = presentAgentArtifact(event.artifact);
+        if (presented.draft) setDraft(presented.draft);
+        if (presented.text) updateMessageBody(assistantMessageId, (body) => body || presented.text || "");
+        return;
+      }
+
+      if (event.type === "interruption") {
+        setActiveRunId(event.runId);
+        setInterruption(event.interruption);
+        setRunStatus(event.interruption.kind === "CONFIRMATION" ? "WAITING_FOR_CONFIRMATION" : "WAITING_FOR_USER");
+        updateMessageBody(assistantMessageId, (body) => body || event.interruption.question);
+        return;
+      }
+
+      if (event.type === "step") {
+        setRunStatus(`${event.node} · ${event.status}`);
+        return;
+      }
+
+      if (event.type === "done" && "reason" in event) {
+        setRunStatus(event.reason);
+        if (!["WAITING_FOR_USER", "WAITING_FOR_CONFIRMATION"].includes(event.reason)) {
+          setActiveRunId(null);
+          setInterruption(null);
+        }
+        return;
+      }
+
       if (event.type === "error") {
-        throw new Error(event.error || "AI 助手请求失败");
+        throw new Error(event.error || event.message || "AI 助手请求失败");
       }
     };
 
@@ -364,6 +456,20 @@ export function AgentPanel({
     if (remaining) {
       handleLine(remaining);
     }
+  }
+
+  async function ensureRuntimeSession() {
+    if (runtimeSessionId) return runtimeSessionId;
+    const response = await fetch("/api/agent/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: selectedPerson ? `${selectedPerson.name} 资料补全` : "家谱资料补全" }),
+    });
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.error || "创建 Agent 会话失败");
+    const id = json.session.id as string;
+    setRuntimeSessionId(id);
+    return id;
   }
 
   function handleSendMessage(input?: string) {
@@ -394,10 +500,11 @@ export function AgentPanel({
 
     startSubmitting(async () => {
       try {
-        const response = await fetch("/api/agent/chat", {
+        const sessionId = runtimeEnabled ? await ensureRuntimeSession() : null;
+        const response = await fetch(runtimeEnabled ? "/api/agent/runs" : "/api/agent/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text }),
+          body: JSON.stringify(runtimeEnabled ? { sessionId, goal: text } : { message: text }),
         });
 
         if (!response.ok) {
@@ -419,6 +526,46 @@ export function AgentPanel({
         toast.error(message);
       }
     });
+  }
+
+  function handleResumeRuntime(input: { answer?: string; confirmation?: boolean }) {
+    if (!activeRunId || !interruption) return;
+    const assistantMessageId = nextMessageId("assistant-resume");
+    pushMessage({ id: assistantMessageId, role: "assistant", title: "谱小助", body: "" });
+    startSubmitting(async () => {
+      try {
+        const response = await fetch(`/api/agent/runs/${activeRunId}/resume`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...input,
+            argumentsHash: interruption.pendingTool?.argumentsHash,
+          }),
+        });
+        if (!response.ok) {
+          const json = await response.json();
+          throw new Error(json.error || "恢复 Agent 运行失败");
+        }
+        setInterruption(null);
+        await readAgentStream(response, assistantMessageId);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "恢复 Agent 运行失败");
+      }
+    });
+  }
+
+  async function handleCancelRuntime() {
+    if (!activeRunId) return;
+    const response = await fetch(`/api/agent/runs/${activeRunId}/cancel`, { method: "POST" });
+    if (response.ok) {
+      setActiveRunId(null);
+      setInterruption(null);
+      setRunStatus("CANCELLED");
+      toast.success("已取消 Agent 运行");
+    } else {
+      const json = await response.json();
+      toast.error(json.error || "取消失败");
+    }
   }
 
   function handleApplyDraft() {
@@ -461,7 +608,9 @@ export function AgentPanel({
           <Bot className="text-primary" />
           AI 修谱助手
         </CardTitle>
-        <CardDescription>直接对话：录入家谱、查询关系、分析资料缺口。</CardDescription>
+        <CardDescription>
+          {runtimeEnabled ? "受约束 Agent：多步调查、人工确认、可恢复运行。" : "直接对话：录入家谱、查询关系、分析资料缺口。"}
+        </CardDescription>
       </CardHeader>
 
       <CardContent className="app-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pt-4">
@@ -493,6 +642,37 @@ export function AgentPanel({
         />
 
         <Separator />
+
+        {runtimeEnabled && runStatus ? (
+          <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-card/72 px-3 py-2 text-xs">
+            <span className="text-muted-foreground">运行状态：{runStatus}</span>
+            {activeRunId ? <Button size="sm" variant="ghost" onClick={handleCancelRuntime}>取消运行</Button> : null}
+          </div>
+        ) : null}
+
+        {runtimeEnabled && interruption ? (
+          <Alert>
+            <TriangleAlert />
+            <AlertTitle>{interruption.reason}</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <p>{interruption.question}</p>
+              {interruption.kind === "CONFIRMATION" ? (
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => handleResumeRuntime({ confirmation: true })}>确认创建待审修订</Button>
+                  <Button size="sm" variant="outline" onClick={() => handleResumeRuntime({ confirmation: false })}>取消</Button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {interruption.options.map((option) => (
+                    <Button key={option.value} size="sm" variant="outline" onClick={() => handleResumeRuntime({ answer: option.value })}>
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         {/* 快捷建议 */}
         {suggestionChips.length > 0 && (

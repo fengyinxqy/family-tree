@@ -2,11 +2,18 @@
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { runUnifiedAgentStream } from "@/lib/agent/unified-agent";
+import { createAgentEventStream } from "@/lib/agent/runtime/http";
+import { executeBoundedAgentRun } from "@/lib/agent/runtime/graph";
+import { createAgentSession, startAgentRun } from "@/services/agent-runtime.service";
 import { getActiveFamilyTreeForUser } from "@/services/family-tree-space.service";
 
 const chatRequestSchema = z.object({
   message: z.string().min(1, "message is required"),
+  sessionId: z.string().min(1).optional(),
 });
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 /**
  * POST /api/agent/chat
@@ -40,6 +47,14 @@ export async function POST(request: Request) {
       userId,
       userName,
     );
+
+    if (process.env.AGENT_RUNTIME_ENABLED === "true") {
+      const agentSession = body.sessionId
+        ? { id: body.sessionId }
+        : await createAgentSession(userId, activeTree.id, { title: body.message.slice(0, 60) });
+      const run = await startAgentRun(userId, agentSession.id, body.message);
+      return createAgentEventStream(run.id, (emit) => executeBoundedAgentRun(run.id, emit));
+    }
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({

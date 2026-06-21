@@ -1,35 +1,34 @@
-## ADDED Requirements
+## 新增要求
 
-### Requirement: AI contributions SHALL become immutable revision groups
-The system SHALL convert an accepted AI intake draft or AI relationship proposal into a family-scoped revision group before any proposed person, event, or relationship affects formal business records. The group MUST preserve the initiating user, source snapshot, ordered member revisions, reference mapping, schema versions, and group status.
+### 要求：AI 贡献必须转换为不可变修订组
+在任何拟议的人物、事件或关系影响正式业务记录之前，系统必须将用户接受的 AI 录入草稿或 AI 关系提案转换为家谱范围内的修订组。修订组必须保留发起用户、来源快照、有序的成员修订、引用映射、模式版本以及修订组状态。
 
-#### Scenario: User accepts an AI intake draft
-- **WHEN** an authorized EDITOR accepts a ready AI intake draft containing new people and relationships
-- **THEN** the system SHALL create one revision group with typed member revisions
-- **AND** it SHALL NOT create or update formal people, events, or relationships
+#### 场景：用户接受 AI 录入草稿
+- **当** 获得授权的编辑者接受一个已准备就绪，且包含新增人物和关系的 AI 录入草稿
+- **那么** 系统必须创建一个包含类型化成员修订的修订组
+- **并且** 系统不得创建或更新正式的人物、事件或关系记录
 
-#### Scenario: AI proposal reuses a published person
-- **WHEN** a proposal references an existing active person in the same family
-- **THEN** the revision group SHALL preserve that published identifier as a scoped dependency
-- **AND** publishing SHALL reject the group if the dependency becomes invalid or conflicting
+#### 场景：AI 提案复用已发布人物
+- **当** 提案引用同一家谱中现有的有效人物
+- **那么** 修订组必须将该已发布人物的标识符保留为受家谱范围约束的依赖
+- **并且** 如果该依赖变为无效或发生冲突，系统必须拒绝发布修订组
 
-### Requirement: AI revision groups SHALL be reviewed and published atomically
-The system SHALL submit, review, and publish an AI revision group as one attributable unit. Publishing MUST resolve internal temporary references, rerun current genealogy integrity validation, apply all formal writes, increment the family revision, and persist audit records in one transaction.
+### 要求：AI 修订组必须以原子方式审校和发布
+系统必须将 AI 修订组作为一个可追溯的整体进行提交、审校和发布。发布时必须解析组内临时引用，重新执行当前的家谱完整性校验，在同一事务中完成所有正式写入、递增家谱修订号并持久化审计记录。
 
-#### Scenario: Reviewer approves a valid AI group
-- **WHEN** an authorized reviewer approves an IN_REVIEW AI revision group
-- **THEN** the entire immutable group SHALL become APPROVED
-- **AND** no member revision SHALL become formally visible before publication
+#### 场景：审校者批准有效的 AI 修订组
+- **当** 获得授权的审校者批准一个处于 `IN_REVIEW` 状态的 AI 修订组
+- **那么** 整个不可变修订组必须变为 `APPROVED` 状态
+- **并且** 在发布前，任何成员修订都不得在正式数据中可见
 
-#### Scenario: One proposed relationship conflicts at publish time
-- **WHEN** any relationship in an approved AI group would create a duplicate, cycle, self-reference, or generation conflict
-- **THEN** the system SHALL reject the entire publication
-- **AND** no person, event, relationship, family revision, or success audit state SHALL change
+#### 场景：某个拟议关系在发布时发生冲突
+- **当** 已批准修订组中的任一关系会造成重复关系、关系环、自关联或代际冲突
+- **那么** 系统必须拒绝发布整个修订组
+- **并且** 任何人物、事件、关系、家谱修订号或成功审计状态都不得发生变化
 
-### Requirement: AI apply endpoints SHALL not bypass revision authorization
-Every AI apply endpoint SHALL authorize the current family action and SHALL return revision-group metadata rather than direct formal-write results.
+### 要求：AI 应用接口不得绕过修订授权
+每个 AI 应用接口都必须对当前家谱操作进行授权校验，并且必须返回修订组元数据，而不是直接写入正式记录后的结果。
 
-#### Scenario: Viewer calls AI apply directly
-- **WHEN** a VIEWER bypasses the client and calls an AI apply endpoint
-- **THEN** the system SHALL reject the request without creating a revision group or formal record
-
+#### 场景：查看者直接调用 AI 应用接口
+- **当** 查看者绕过客户端直接调用 AI 应用接口
+- **那么** 系统必须拒绝该请求，且不得创建修订组或正式记录
