@@ -13,6 +13,7 @@ import {
   UserRound,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -120,7 +121,7 @@ function MessageLog({ messages, busyLabel }: { messages: AgentMessage[]; busyLab
               }
             >
               <div className="mb-1 text-xs font-medium opacity-75">{message.title}</div>
-              <div className="max-w-none text-sm [&_p]:leading-relaxed [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_li]:my-0.5 [&_strong]:font-semibold [&_hr]:my-2 [&_hr]:border-border/40 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold"><ReactMarkdown>{message.body}</ReactMarkdown></div>
+              <div className="max-w-none text-sm [&_p]:leading-relaxed [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_li]:my-0.5 [&_strong]:font-semibold [&_hr]:my-2 [&_hr]:border-border/40 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_table]:w-full [&_table]:border-collapse [&_table]:my-2 [&_th]:border [&_th]:border-border/60 [&_th]:bg-muted/50 [&_th]:px-3 [&_th]:py-1.5 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_td]:border [&_td]:border-border/60 [&_td]:px-3 [&_td]:py-1.5 [&_td]:text-sm"><ReactMarkdown remarkPlugins={[remarkGfm]}>{message.body}</ReactMarkdown></div>
             </div>
             {message.role === "user" ? (
               <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
