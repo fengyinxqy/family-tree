@@ -48,6 +48,22 @@ export function isInvitationUsable(input: {
   return input.status === "PENDING" && input.expiresAt.getTime() > (input.now ?? new Date()).getTime();
 }
 
+export function assertInvitationAcceptanceAllowed(
+  invitation: { status: "PENDING" | "ACCEPTED" | "REVOKED"; expiresAt: Date; email: string },
+  userEmail: string,
+  now?: Date,
+): void {
+  if (!isInvitationUsable({ ...invitation, now }) || normalizeEmail(invitation.email) !== normalizeEmail(userEmail)) {
+    throw new Error("邀请不存在、已失效或不属于当前账号");
+  }
+}
+
+export function assertOwnershipTransferTarget(input: { role: FamilyRole; status: "ACTIVE" | "SUSPENDED" }): void {
+  if (input.status !== "ACTIVE" || input.role === "OWNER") {
+    throw new Error("目标成员不可用于所有权转移");
+  }
+}
+
 export function assertMembershipRoleChangeAllowed(input: {
   actorRole: FamilyRole;
   targetRole: FamilyRole;
@@ -60,4 +76,3 @@ export function assertMembershipRoleChangeAllowed(input: {
     throw new Error("无权管理家族成员角色");
   }
 }
-

@@ -16,7 +16,7 @@ export type ConfirmationKind =
   | "snapshot_restore"
   | "person_restore"
   | "relationship_restore"
-  | "material_delete" | "content_withdrawal";
+  | "material_delete";
 
 export interface CreateConfirmationParams {
   treeId: string;
@@ -100,7 +100,7 @@ export async function consumeConfirmation(
 
   if (confirmation.revision !== params.currentRevision) {
     throw new Error(
-      "数据已被修改，请重新预览 (确认修订: ${confirmation.revision}, 当前修订: ${params.currentRevision})",
+      `数据已被修改，请重新预览 (确认修订: ${confirmation.revision}, 当前修订: ${params.currentRevision})`,
     );
   }
 

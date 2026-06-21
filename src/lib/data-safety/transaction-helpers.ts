@@ -29,6 +29,19 @@ export interface AuditBatchResult {
   entries: string[];
 }
 
+const AUDIT_SECRET_KEYS = /(?:token|password|credential|secret|storage_?key|file_?bytes|review_?payload|payload)/i;
+
+export function sanitizeAuditJson(value: Prisma.InputJsonValue): Prisma.InputJsonValue {
+  if (Array.isArray(value)) return value.map((item) => sanitizeAuditJson(item));
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+      key,
+      AUDIT_SECRET_KEYS.test(key) ? "[REDACTED]" : sanitizeAuditJson(item as Prisma.InputJsonValue),
+    ]));
+  }
+  return value;
+}
+
 /**
  * 在业务事务中原子地递增多修订号、创建操作批次和审计条目
  */
@@ -51,7 +64,7 @@ export async function createAuditBatch(
       actorId: params.actorId,
       action: params.action,
       status: params.status ?? "complete",
-      summary: params.summary ?? Prisma.JsonNull,
+      summary: params.summary === undefined ? Prisma.JsonNull : sanitizeAuditJson(params.summary),
     },
   });
 
@@ -64,8 +77,8 @@ export async function createAuditBatch(
         entityType: entry.entityType,
         entityId: entry.entityId,
         action: entry.action,
-        beforeJson: entry.beforeJson ?? Prisma.DbNull,
-        afterJson: entry.afterJson ?? Prisma.DbNull,
+        beforeJson: entry.beforeJson == null ? Prisma.DbNull : sanitizeAuditJson(entry.beforeJson),
+        afterJson: entry.afterJson == null ? Prisma.DbNull : sanitizeAuditJson(entry.afterJson),
       },
     });
     createdEntries.push(created.id);
@@ -109,7 +122,7 @@ export async function requireRevision(
   const current = await getTreeRevision(tx, treeId);
   if (current !== expectedRevision) {
     throw new Error(
-      "数据已被修改，请重新预览 (当前修订: ${current}, 预期: ${expectedRevision})",
+      `数据已被修改，请重新预览 (当前修订: ${current}, 预期: ${expectedRevision})`,
     );
   }
 }

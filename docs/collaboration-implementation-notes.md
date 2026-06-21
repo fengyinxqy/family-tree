@@ -50,7 +50,7 @@
 | 所有权 | 转移 | `ownership.transfer`（OWNER-only） |
 | 修订 | 草稿创建、更新、派生、提交 | `revision.create` / `revision.submit` |
 | 审校 | 队列、详情、决定 | `review.read` / `review.decide` |
-| 发布 | 发布、撤回公开可见性 | `publish.manage` |
+| 发布 | 发布已审批修订 | `publish.manage` |
 
 ## 迁移检查
 
@@ -65,9 +65,9 @@
 
 ### Next.js 16 实施约束
 
-- 动态 Route Handler 的 `params` 继续按 `Promise` 处理；AI 修订组、来源读取和撤回接口使用 Web `Request` / `Response`，并统一通过 `toFamilyHttpError` 返回授权错误。
-- Route Handler 与 Server Action 都是公开入口。AI apply、组提交/审校/发布、来源读取和撤回必须在 DAL 中重新认证、解析当前家族并执行 typed action，不能依赖页面隐藏按钮。
-- 用户、成员角色、修订、来源、审计和撤回状态均为请求时数据，不使用跨用户持久缓存。成功变更后显式 `revalidatePath` 审校页、树页、人物页、资料页和设置页。
+- 动态 Route Handler 的 `params` 继续按 `Promise` 处理；AI 修订组和来源读取接口使用 Web `Request` / `Response`，并统一通过 `toFamilyHttpError` 返回授权错误。
+- Route Handler 与 Server Action 都是公开入口。AI apply、组提交/审校/发布和来源读取必须在 DAL 中重新认证、解析当前家族并执行 typed action，不能依赖页面隐藏按钮。
+- 用户、成员角色、修订、来源和审计均为请求时数据，不使用跨用户持久缓存。成功变更后显式 `revalidatePath` 审校页、树页、人物页、资料页和设置页。
 - Server Component 只向客户端传递当前角色允许的动作布尔值和安全 DTO；不得传邀请令牌哈希、完整 intake 原文、存储键或未授权来源详情。
 - 客户端交互只负责体验级防重；事务幂等、权限、家族作用域、状态机和冲突校验必须由服务端保证。
 
@@ -81,7 +81,7 @@
 
 ### OpenSpec 任务归属
 
-`complete-collaboration-publishing-governance` 负责旧变更中尚未完成的 AI 关系/录入修订、协作审计展示与发布撤回。旧变更 `family-collaboration-review-publishing-permissions` 的 8.2、9.1、9.2、9.3、9.4 保持未勾选，待本变更对应实现完成后再同步状态，避免两处重复实施或提前宣告完成。
+`complete-collaboration-publishing-governance` 负责旧变更中尚未完成的 AI 关系/录入修订与协作审计展示。直接发布撤回能力已从最终产品范围移除；发布后的更正统一通过新修订完成。
 
 ### 收尾入口与动作映射
 
@@ -97,4 +97,3 @@
 | 普通正式读取 | tree/person/timeline/relationship/material services、active query helpers | `family.read.published`，排除未发布与已撤回内容 |
 | 导出与快照 | import-export、exchange package、snapshot/material snapshot | `export.read` / `recovery.manage`，只包含当前有效正式数据 |
 | 协作审计 | operation-history service、settings history panel | `audit.read`（OWNER-only），只返回安全摘要 |
-| 发布撤回 | preview/confirm route 与 withdrawal service | `publish.manage`，确认绑定版本、依赖计划、幂等事务 |

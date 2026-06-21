@@ -6,10 +6,11 @@ import { createAuditBatch } from "@/lib/data-safety";
 import { canPerformFamilyAction, type FamilyRole } from "@/lib/family-access/actions";
 import {
   assertMembershipRoleChangeAllowed,
+  assertInvitationAcceptanceAllowed,
+  assertOwnershipTransferTarget,
   createFamilyInvitationSchema,
   createInvitationToken,
   hashInvitationToken,
-  isInvitationUsable,
   normalizeEmail,
 } from "@/lib/family-access/membership";
 import { authorizeFamilyAction } from "@/services/family-authorization.service";
@@ -141,15 +142,17 @@ export async function acceptFamilyInvitation(tokenInput: string) {
   const user = await requireCurrentUser();
   const tokenHash = hashInvitationToken(token);
   const invitation = await prisma.familyInvitation.findUnique({ where: { tokenHash } });
-  if (!invitation || !isInvitationUsable(invitation) || normalizeEmail(invitation.email) !== user.email) {
+  if (!invitation) {
     throw new Error("邀请不存在、已失效或不属于当前账号");
   }
+  assertInvitationAcceptanceAllowed(invitation, user.email);
 
   const membership = await prisma.$transaction(async (tx) => {
     const current = await tx.familyInvitation.findUnique({ where: { tokenHash } });
-    if (!current || !isInvitationUsable(current) || normalizeEmail(current.email) !== user.email) {
+    if (!current) {
       throw new Error("邀请不存在、已失效或已被使用");
     }
+    assertInvitationAcceptanceAllowed(current, user.email);
     const existing = await tx.familyMembership.findUnique({ where: { treeId_userId: { treeId: current.treeId, userId: user.id } } });
     if (existing) throw new Error("你已经是该家族成员");
     const created = await tx.familyMembership.create({ data: { treeId: current.treeId, userId: user.id, role: current.role } });
@@ -244,7 +247,8 @@ export async function transferFamilyOwnership(targetMembershipIdInput: string) {
   const { user, tree, membership: actor } = await requireActiveTree("ownership.transfer");
   await prisma.$transaction(async (tx) => {
     const target = await tx.familyMembership.findFirst({ where: { id: targetMembershipId, treeId: tree.id, status: "ACTIVE" } });
-    if (!target || target.role === "OWNER") throw new Error("目标成员不可用于所有权转移");
+    if (!target) throw new Error("目标成员不可用于所有权转移");
+    assertOwnershipTransferTarget(target);
     await tx.familyMembership.update({ where: { id: actor.id }, data: { role: "ADMIN" } });
     await tx.familyMembership.update({ where: { id: target.id }, data: { role: "OWNER" } });
     await tx.familyTree.update({ where: { id: tree.id }, data: { ownerId: target.userId } });

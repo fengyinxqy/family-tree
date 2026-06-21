@@ -5,19 +5,24 @@ import { getToken } from "next-auth/jwt";
 const protectedPaths = [
   "/tree",
   "/person",
+  "/documents",
+  "/reviews",
+  "/settings",
   "/api/persons",
   "/api/relationships",
+  "/api/materials",
+  "/api/family",
+  "/api/revisions",
+  "/api/revision-groups",
   "/api/agent",
   "/api/import-export",
 ];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  if (!protectedPaths.some((path) => pathname.startsWith(path))) return NextResponse.next();
 
-  const isProtected = protectedPaths.some((path) => pathname.startsWith(path));
-  if (!isProtected) return NextResponse.next();
-
-  // 用 NextAuth 内置 JWT 验证，不依赖 prisma（Edge Runtime 兼容）
+  // Proxy 只做乐观会话检查；所有家族授权仍由路由和 DAL 在每次请求中执行。
   const token = await getToken({
     req: request,
     secret: process.env.AUTH_SECRET,
@@ -38,8 +43,15 @@ export const config = {
   matcher: [
     "/tree/:path*",
     "/person/:path*",
+    "/documents/:path*",
+    "/reviews/:path*",
+    "/settings/:path*",
     "/api/persons/:path*",
     "/api/relationships/:path*",
+    "/api/materials/:path*",
+    "/api/family/:path*",
+    "/api/revisions/:path*",
+    "/api/revision-groups/:path*",
     "/api/agent/:path*",
     "/api/import-export/:path*",
   ],

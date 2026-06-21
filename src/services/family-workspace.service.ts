@@ -21,15 +21,16 @@ export async function getFamilyWorkspaceData(): Promise<FamilyWorkspaceData> {
     prisma.person.findMany({
       where: { treeId: activeTree.id, deletedAt: null, withdrawnAt: null },
       include: {
-        events: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+        events: { where: { withdrawnAt: null }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
       },
       orderBy: { createdAt: "asc" },
     }),
     prisma.relationship.findMany({
       where: {
         deletedAt: null,
-        personA: { treeId: activeTree.id, deletedAt: null },
-        personB: { treeId: activeTree.id, deletedAt: null },
+        withdrawnAt: null,
+        personA: { treeId: activeTree.id, deletedAt: null, withdrawnAt: null },
+        personB: { treeId: activeTree.id, deletedAt: null, withdrawnAt: null },
       },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     }),

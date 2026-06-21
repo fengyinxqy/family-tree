@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Key mutations SHALL produce immutable audit records
-The system SHALL create append-only audit records for person, relationship, deletion, recovery, import, snapshot-restore, family invitation, membership, role, ownership transfer, revision submission, review decision, publish, and publication-withdrawal mutations in the same transaction as the authoritative state change.
+The system SHALL create append-only audit records for person, relationship, deletion, recovery, import, snapshot-restore, family invitation, membership, role, ownership transfer, revision submission, review decision, and publish mutations in the same transaction as the authoritative state change.
 
 #### Scenario: Owner inspects operation history
 - **WHEN** the family tree OWNER opens operation history

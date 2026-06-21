@@ -1,4 +1,4 @@
-﻿## Purpose
+## Purpose
 
 Define the data safety and recovery behavior for family trees so the system can provide soft deletion, operation auditing, confirmation-guarded destructive actions, and snapshot-based recovery.
 
@@ -70,11 +70,11 @@ The system SHALL allow the family tree owner to restore a deletion batch atomica
 - **THEN** the system SHALL reject the request without revealing or modifying the batch contents
 
 ### Requirement: Key mutations SHALL produce immutable audit records
-The system SHALL create append-only audit records for person, relationship, deletion, recovery, import, and snapshot-restore mutations in the same transaction as the business change.
+The system SHALL create append-only audit records for person, relationship, deletion, recovery, import, snapshot-restore, family invitation, membership, role, ownership-transfer, revision-submission, review-decision, and publish mutations in the same transaction as the business change. Each audit record SHALL capture actor identity, timestamp, operation type, target entity or scope, and a summary that avoids storing unnecessary sensitive payloads.
 
 #### Scenario: User inspects operation history
 - **WHEN** the family tree owner opens operation history
-- **THEN** the system SHALL provide paginated records showing action, timestamp, actor, affected entity summary, result, and recovery status
+- **THEN** the system SHALL provide paginated records showing action, timestamp, actor, affected entity summary, result, recovery status, and any relevant collaboration state transition
 
 #### Scenario: Business write succeeds but audit write fails
 - **WHEN** the audit record cannot be persisted during a key mutation
@@ -83,6 +83,10 @@ The system SHALL create append-only audit records for person, relationship, dele
 #### Scenario: Audit record modification is attempted
 - **WHEN** a normal product request attempts to update or delete an existing audit record
 - **THEN** the system SHALL reject the operation
+
+#### Scenario: Collaboration event is audited without leaking secrets
+- **WHEN** an invitation, membership, role, review, or publish event is recorded
+- **THEN** the audit summary SHALL include the relevant identifiers and state transition while excluding raw tokens, passwords, and unnecessary revision payload contents
 
 ### Requirement: Family snapshots SHALL support controlled recovery
 The family tree owner SHALL be able to create a server-side snapshot manually, and the system MUST create a pre-operation snapshot before destructive import or snapshot restoration.

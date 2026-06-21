@@ -99,14 +99,12 @@ export function ImportExportPanel() {
       const response = await fetch("/api/import-export/import", { method: "POST", body });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "导入失败");
-      toast.success(
-        `${"已恢复 "}${result.personCount} 位人物、${result.relationshipCount} 条关系和${result.eventCount} 条事件`
-      );
+      toast.success("导入内容已创建为草稿修订组，请提交审校后再发布");
       setPreviewDialogOpen(false);
       setPreviewResult(null);
       setConfirmationId(null);
       setPendingFile(null);
-      router.refresh();
+      router.push("/reviews");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "导入失败");
     } finally {

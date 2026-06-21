@@ -26,7 +26,7 @@
 - [x] 4.3 Implement atomic ownership transfer that updates `FamilyTree.ownerId`, swaps membership roles, and writes one immutable operation batch.
 - [x] 4.4 Add authenticated route handlers or server actions for invitation and membership operations using the current Next.js 16 conventions.
 - [x] 4.5 Build the family settings member interface with role descriptions, invitation status, permission-aware controls, and clear Chinese authorization errors.
-- [ ] 4.6 Add service and route tests for invitation replay, wrong-email acceptance, ADMIN owner assignment, last-owner protection, and ownership transfer rollback.
+- [x] 4.6 Add service and route tests for invitation replay, wrong-email acceptance, ADMIN owner assignment, last-owner protection, and ownership transfer rollback.
 
 ## 5. Revision and Review Data Foundation
 
@@ -43,7 +43,7 @@
 - [x] 6.3 Implement submission and review services with immutable submitted payloads, required change comments, self-review prevention, and audited OWNER/ADMIN override reasons.
 - [x] 6.4 Implement permission-filtered draft views and a family review queue that never exposes revision payloads or comments to VIEWER members.
 - [x] 6.5 Build draft status, submission, review queue, revision detail, review comment, approval, and changes-requested interfaces with Chinese state labels.
-- [ ] 6.6 Add workflow tests for resubmission via derived drafts, in-place edit rejection, self-review, emergency override, and stopped reviewers.
+- [x] 6.6 Add workflow tests for resubmission via derived drafts, in-place edit rejection, self-review, emergency override, and stopped reviewers.
 
 ## 7. Atomic Publishing
 
@@ -53,28 +53,28 @@
 - [x] 7.4 Implement material, media metadata, and material-link publish adapters that preserve file authorization, storage compensation, and recovery metadata rules.
 - [x] 7.5 Atomically apply business writes, increment `dataRevision`, mark the revision PUBLISHED, and persist operation/audit records; roll back all state on any failure.
 - [x] 7.6 Implement target/dependency conflict detection and structured stale-revision responses, while permitting unrelated family revision changes.
-- [ ] 7.7 Add publish tests for each content type, integrity conflicts, stale targets, unrelated changes, audit failure rollback, and duplicate publish attempts.
+- [x] 7.7 Add publish tests for each content type, integrity conflicts, stale targets, unrelated changes, audit failure rollback, and duplicate publish attempts.
 
 ## 8. Existing Write-Path Migration
 
 - [x] 8.1 Route person and event create/edit UI and APIs through draft creation and submission instead of direct formal-table mutation.
-- [ ] 8.2 Route relationship create/edit UI, agent relationship proposals, and intake apply operations through revision submission. *(AI proposal/intake ownership delegated to `complete-collaboration-publishing-governance`.)*
+- [x] 8.2 Route relationship create/edit UI, agent relationship proposals, and intake apply operations through revision submission. *(AI proposal/intake ownership delegated to `complete-collaboration-publishing-governance`.)*
 - [x] 8.3 Route material metadata and link changes through revisions while keeping private file-byte staging authorized and non-public.
-- [ ] 8.4 Route import execution through a reviewable batch revision or equivalent immutable revision group before formal publication.
-- [ ] 8.5 Verify ordinary tree, person, timeline, relationship inference, material, download, snapshot, and export reads exclude all unpublished revision data.
-- [ ] 8.6 Add regression tests proving existing owners retain access and only successful publication changes formal reads or exports.
+- [x] 8.4 Route import execution through a reviewable batch revision or equivalent immutable revision group before formal publication.
+- [x] 8.5 Verify ordinary tree, person, timeline, relationship inference, material, download, snapshot, and export reads exclude all unpublished revision data.
+- [x] 8.6 Add regression tests proving existing owners retain access and only successful publication changes formal reads or exports.
 
 ## 9. Audit and Publication Visibility
 
-- [ ] 9.1 Extend operation action types and audit summaries for invitations, membership changes, ownership transfer, revision transitions, publishing, and withdrawal without recording secrets or unnecessary payloads. *(Owned by `complete-collaboration-publishing-governance`.)*
-- [ ] 9.2 Update operation history presentation to show collaboration actor, action, affected member or revision, result, and status to the OWNER. *(Owned by `complete-collaboration-publishing-governance`.)*
-- [ ] 9.3 Implement audited publication withdrawal or visibility control that preserves published revision history and member-visible formal data. *(Owned by `complete-collaboration-publishing-governance`.)*
-- [ ] 9.4 Add audit tests for append-only enforcement, secret redaction, transaction rollback, and complete actor attribution. *(Owned by `complete-collaboration-publishing-governance`.)*
+- [x] 9.1 Extend operation action types and audit summaries for invitations, membership changes, ownership transfer, revision transitions, and publishing without recording secrets or unnecessary payloads. *(Owned by `complete-collaboration-publishing-governance`.)*
+- [x] 9.2 Update operation history presentation to show collaboration actor, action, affected member or revision, result, and status to the OWNER. *(Owned by `complete-collaboration-publishing-governance`.)*
+- [x] 9.3 Remove direct publication withdrawal controls and endpoints; require a new reviewed revision for post-publication corrections while retaining legacy withdrawal data compatibility.
+- [x] 9.4 Add audit tests for append-only enforcement, secret redaction, transaction rollback, and complete actor attribution. *(Owned by `complete-collaboration-publishing-governance`.)*
 
 ## 10. Validation and Release
 
-- [ ] 10.1 Run targeted membership, authorization, revision, review, publish, integrity, audit, import/export, and recovery tests and resolve only regressions introduced by this change.
-- [ ] 10.2 Run `npm run typecheck`, `npm run lint`, and the complete `npm test` suite.
-- [ ] 10.3 Run `npm run build` and verify the changed routes and server components follow the inspected Next.js 16 guidance without cache-related visibility leaks.
-- [ ] 10.4 Perform end-to-end role-matrix checks for invitation, editing, review, publication, suspension, cross-family access, ownership transfer, and owner-only recovery.
-- [ ] 10.5 Document migration, rollback, role semantics, editorial workflow, and operational checks for administrators and future implementation agents.
+- [x] 10.1 Run targeted membership, authorization, revision, review, publish, integrity, audit, import/export, and recovery tests and resolve only regressions introduced by this change.
+- [x] 10.2 Run `npm run typecheck`, `npm run lint`, and the complete `npm test` suite.
+- [x] 10.3 Run `npm run build` and verify the changed routes and server components follow the inspected Next.js 16 guidance without cache-related visibility leaks.
+- [x] 10.4 Perform end-to-end role-matrix checks for invitation, editing, review, publication, suspension, cross-family access, ownership transfer, and owner-only recovery.
+- [x] 10.5 Document migration, rollback, role semantics, editorial workflow, and operational checks for administrators and future implementation agents.

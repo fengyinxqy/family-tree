@@ -202,10 +202,11 @@ export async function getPerson(id: string): Promise<PersonDetailResult> {
   const activeTree = await getActiveFamilyTreeForUser(session.user.id, session.user.name);
   await authorizeFamilyAction(session.user.id, activeTree.id, "family.read.published");
   const person = await prisma.person.findFirst({
-    where: { id, treeId: activeTree.id, deletedAt: null },
+    where: { id, treeId: activeTree.id, deletedAt: null, withdrawnAt: null },
     include: {
-      events: { orderBy: { sortOrder: "asc" } },
+      events: { where: { withdrawnAt: null }, orderBy: { sortOrder: "asc" } },
       relationsA: {
+        where: { deletedAt: null, withdrawnAt: null, personB: { deletedAt: null, withdrawnAt: null } },
         include: {
           personB: {
             select: { id: true, name: true, gender: true, birthDate: true, deathDate: true },
@@ -213,6 +214,7 @@ export async function getPerson(id: string): Promise<PersonDetailResult> {
         },
       },
       relationsB: {
+        where: { deletedAt: null, withdrawnAt: null, personA: { deletedAt: null, withdrawnAt: null } },
         include: {
           personA: {
             select: { id: true, name: true, gender: true, birthDate: true, deathDate: true },
@@ -231,11 +233,12 @@ export async function getPerson(id: string): Promise<PersonDetailResult> {
     where: {
       personId: id,
       deletedAt: null,
-      material: { deletedAt: null, treeId: person.treeId },
+      withdrawnAt: null,
+      material: { deletedAt: null, withdrawnAt: null, treeId: person.treeId },
     },
     include: {
       material: {
-        include: { _count: { select: { files: { where: { deletedAt: null } } } } },
+        include: { _count: { select: { files: { where: { deletedAt: null, withdrawnAt: null } } } } },
       },
     },
     orderBy: { createdAt: "desc" },

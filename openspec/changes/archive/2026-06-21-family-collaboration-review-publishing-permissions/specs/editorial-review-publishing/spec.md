@@ -97,14 +97,14 @@ Normal tree views, person details, relationship inference, timelines, family exp
 - **THEN** the normal backup SHALL contain only published business data and SHALL exclude revision payloads and review comments by default
 
 ### Requirement: Published content changes SHALL require a new revision
-The system SHALL not mutate a PUBLISHED revision in place. Corrections, deletion proposals, and publication withdrawal SHALL create a new attributable revision or a dedicated audited publication action that preserves the previously published history.
+The system SHALL not mutate a PUBLISHED revision in place. Corrections and deletion proposals SHALL create a new attributable revision that preserves the previously published history. The product SHALL NOT expose a direct publication-withdrawal operation.
 
 #### Scenario: Published biography needs correction
 - **WHEN** an editor changes content after its revision was published
 - **THEN** the system SHALL create a new DRAFT based on the current published state
 - **AND** the earlier published revision SHALL remain immutable
 
-#### Scenario: Publisher withdraws public visibility
-- **WHEN** an OWNER or ADMIN withdraws a published item from an enabled public presentation
-- **THEN** the system SHALL preserve member-visible business history and write an immutable withdrawal audit event
-
+#### Scenario: Publisher wants to remove or correct published content
+- **WHEN** an OWNER or ADMIN needs to remove or correct a published item
+- **THEN** the system SHALL require a new attributable revision and the normal review-and-publish workflow
+- **AND** no direct withdrawal endpoint or settings control SHALL be available

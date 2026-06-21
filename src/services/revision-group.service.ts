@@ -1,8 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { createAuditBatch } from "@/lib/data-safety";
+import { createAuditBatch, consumeConfirmation, getTreeRevision } from "@/lib/data-safety";
 import {
   createRevisionGroupSchema,
+  importSourceSnapshotSchema,
   type CreateRevisionGroupInput,
 } from "@/lib/editorial/revision-groups";
 import { authorizeFamilyAction } from "@/services/family-authorization.service";
@@ -18,6 +19,11 @@ import { syncGenerationNumbersForComponent } from "@/services/relationship.servi
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { canPerformFamilyAction } from "@/lib/family-access/actions";
+import { exportFamilyBackupForUser } from "@/services/import-export.service";
+import { buildMaterialSnapshotDocument } from "@/lib/data-safety/material-snapshot";
+import { buildRestorePayloads } from "@/lib/import-export/backup-format";
+
+type ImportSourceSnapshot = z.infer<typeof importSourceSnapshotSchema>;
 
 async function validateExistingPersonReferences(treeId: string, input: CreateRevisionGroupInput) {
   const ids = new Set<string>();
@@ -135,6 +141,7 @@ export async function createRevisionGroup(
 ) {
   await authorizeFamilyAction(userId, treeId, "revision.create");
   const data = createRevisionGroupSchema.parse(input);
+  if (data.source.kind === "FAMILY_IMPORT") throw new Error("导入修订组必须通过导入预览与确认创建");
   await validateExistingPersonReferences(treeId, data);
 
   return prisma.$transaction(async (tx) => {
@@ -189,6 +196,65 @@ export async function createRevisionGroup(
       entries: [{ entityType: "revision_group", entityId: group.id, action: "create", afterJson: { status: "DRAFT", memberCount: data.members.length } }],
     });
     return { id: group.id, status: group.status, memberCount: data.members.length };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function createImportRevisionGroup(input: {
+  userId: string;
+  treeId: string;
+  confirmationId: string;
+  confirmationInput: unknown;
+  source: ImportSourceSnapshot;
+}) {
+  await authorizeFamilyAction(input.userId, input.treeId, "import.execute");
+  const source = importSourceSnapshotSchema.parse(input.source);
+  const counts = source.document.summary;
+  const summary = source.document.kind === "family-exchange-package"
+    ? `导入交换包：${counts.personCount} 人、${counts.relationshipCount} 条关系、${counts.eventCount} 个事件、${source.document.summary.materialCount} 份资料`
+    : `导入备份：${counts.personCount} 人、${counts.relationshipCount} 条关系、${counts.eventCount} 个事件`;
+
+  return prisma.$transaction(async (tx) => {
+    const currentRevision = await getTreeRevision(tx, input.treeId);
+    await consumeConfirmation(tx, {
+      confirmationId: input.confirmationId,
+      treeId: input.treeId,
+      userId: input.userId,
+      kind: "import",
+      input: input.confirmationInput,
+      currentRevision,
+    });
+    const group = await tx.revisionGroup.create({
+      data: {
+        treeId: input.treeId,
+        authorId: input.userId,
+        schemaVersion: 1,
+        summary,
+        sourceSnapshot: source as Prisma.InputJsonValue,
+        sourceTextHash: source.sourceTextHash,
+        safeSourceExcerpt: source.safeExcerpt,
+        baseFamilyRevision: currentRevision,
+      },
+    });
+    await tx.revisionProvenance.create({
+      data: {
+        treeId: input.treeId,
+        groupId: group.id,
+        kind: "MANUAL_KNOWLEDGE",
+        sourceTextHash: source.sourceTextHash,
+        safeExcerpt: source.safeExcerpt,
+        safeSourceLabel: source.format === "EXCHANGE" ? "家族交换包导入" : "家族 JSON 备份导入",
+        createdBy: input.userId,
+      },
+    });
+    await createAuditBatch(tx, {
+      treeId: input.treeId,
+      actorId: input.userId,
+      action: "family_import_revision_create",
+      incrementFamilyRevision: false,
+      summary: { groupId: group.id, format: source.format, counts },
+      entries: [{ entityType: "revision_group", entityId: group.id, action: "create", afterJson: { status: "DRAFT", format: source.format, counts } }],
+    });
+    return { groupId: group.id, status: group.status, requiresReview: true };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
@@ -257,6 +323,159 @@ export async function reviewRevisionGroup(groupId: string, input: unknown) {
   return updated;
 }
 
+async function publishImportRevisionGroup(userId: string, treeId: string, groupId: string, source: ImportSourceSnapshot) {
+  const currentBackup = await exportFamilyBackupForUser(userId, treeId);
+  const currentSnapshot = await buildMaterialSnapshotDocument(userId, treeId, currentBackup);
+  const document = source.document;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const group = await tx.revisionGroup.findFirst({ where: { id: groupId, treeId } });
+    if (!group || group.status !== "APPROVED") throw new Error("导入修订组已不处于可发布状态");
+    const tree = await tx.familyTree.findUniqueOrThrow({ where: { id: treeId }, select: { dataRevision: true } });
+    assertDependenciesUnchanged(group.baseFamilyRevision, tree.dataRevision);
+
+    await tx.familySnapshot.create({
+      data: {
+        treeId,
+        reason: "pre_import",
+        version: 2,
+        sourceRevision: tree.dataRevision,
+        creatorId: userId,
+        snapshotJson: currentSnapshot as Prisma.InputJsonValue,
+        personCount: currentSnapshot.persons.length,
+        relationshipCount: currentSnapshot.relationships.length,
+        eventCount: currentSnapshot.events.length,
+        materialCount: currentSnapshot.materials.length,
+        fileCount: currentSnapshot.mediaObjects.length,
+      },
+    });
+
+    await tx.sourceMaterial.deleteMany({ where: { treeId } });
+    await tx.relationship.deleteMany({ where: { personA: { treeId } } });
+    await tx.personEvent.deleteMany({ where: { person: { treeId } } });
+    await tx.person.deleteMany({ where: { treeId } });
+
+    const personIdMap = new Map<string, string>();
+    for (const person of document.persons) {
+      const created = await tx.person.create({
+        data: {
+          treeId,
+          createdBy: group.authorId,
+          name: person.name,
+          gender: person.gender,
+          birthDate: person.birthDate,
+          deathDate: person.deathDate,
+          bio: person.bio,
+          aliases: person.aliases,
+          generationNumber: person.generationNumber,
+          generationLabel: person.generationLabel,
+          nativePlace: person.nativePlace,
+          notes: person.notes,
+          posX: person.posX,
+          posY: person.posY,
+          createdAt: new Date(person.createdAt),
+        },
+      });
+      personIdMap.set(person.id, created.id);
+    }
+
+    const backupDocument = document.kind === "family-backup"
+      ? document
+      : {
+          kind: "family-backup" as const,
+          version: 1,
+          exportedAt: document.exportedAt,
+          summary: {
+            personCount: document.persons.length,
+            relationshipCount: document.relationships.length,
+            eventCount: document.events.length,
+          },
+          persons: document.persons,
+          relationships: document.relationships,
+          events: document.events,
+        };
+    const restorePayloads = buildRestorePayloads(backupDocument, personIdMap);
+    if (restorePayloads.relationships.length > 0) await tx.relationship.createMany({ data: restorePayloads.relationships });
+
+    const eventIdMap = new Map<string, string>();
+    for (const event of document.events) {
+      const created = await tx.personEvent.create({
+        data: {
+          personId: personIdMap.get(event.personId)!,
+          type: event.type,
+          title: event.title,
+          dateLabel: event.dateLabel,
+          location: event.location,
+          description: event.description,
+          sortOrder: event.sortOrder,
+          createdAt: new Date(event.createdAt),
+        },
+      });
+      eventIdMap.set(event.id, created.id);
+    }
+
+    if (document.kind === "family-exchange-package") {
+      const materialIdMap = new Map<string, string>();
+      for (const material of document.materials) {
+        const created = await tx.sourceMaterial.create({
+          data: {
+            treeId,
+            createdBy: group.authorId,
+            title: material.title,
+            category: material.category,
+            source: material.source,
+            eraLabel: material.eraLabel,
+            contributor: material.contributor,
+            description: material.description,
+            createdAt: new Date(material.createdAt),
+            updatedAt: new Date(material.updatedAt),
+          },
+        });
+        materialIdMap.set(material.id, created.id);
+      }
+      if (document.files.length > 0) {
+        await tx.mediaObject.createMany({
+          data: document.files.map((file) => ({
+            materialId: materialIdMap.get(file.materialId)!,
+            originalName: file.originalName,
+            mimeType: file.mimeType,
+            byteSize: file.byteSize,
+            contentHash: file.contentHash,
+            storageKey: source.storedFiles[file.id],
+            displayOrder: file.displayOrder,
+            createdAt: new Date(file.createdAt),
+          })),
+        });
+      }
+      if (document.links.length > 0) {
+        await tx.materialLink.createMany({
+          data: document.links.map((link) => ({
+            materialId: materialIdMap.get(link.materialId)!,
+            personId: link.personId ? personIdMap.get(link.personId)! : null,
+            personEventId: link.personEventId ? eventIdMap.get(link.personEventId)! : null,
+          })),
+        });
+      }
+    }
+
+    const audit = await createAuditBatch(tx, {
+      treeId,
+      actorId: userId,
+      action: "family_import_publish",
+      summary: { groupId, format: source.format, counts: document.summary },
+      entries: [{ entityType: "revision_group", entityId: groupId, action: "publish", beforeJson: { status: "APPROVED" }, afterJson: { status: "PUBLISHED", format: source.format } }],
+    });
+    await tx.revisionGroup.update({
+      where: { id: groupId },
+      data: { status: "PUBLISHED", publishedAt: new Date(), publishedBy: userId, publishOperationId: audit.batchId },
+    });
+    return { groupId, operationId: audit.batchId, published: true };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  revalidateGroupViews();
+  revalidatePath("/documents");
+  return result;
+}
+
 export async function publishRevisionGroup(groupId: string) {
   const { userId, treeId } = await requireGroupContext("publish.manage");
   const existing = await prisma.revisionGroup.findFirst({ where: { id: groupId, treeId } });
@@ -265,6 +484,8 @@ export async function publishRevisionGroup(groupId: string) {
     return { groupId: existing.id, operationId: existing.publishOperationId, published: true };
   }
   if (existing.status !== "APPROVED") throw new Error("只有已通过审校的修订组可以发布");
+  const importSource = importSourceSnapshotSchema.safeParse(existing.sourceSnapshot);
+  if (importSource.success) return publishImportRevisionGroup(userId, treeId, groupId, importSource.data);
 
   const result = await prisma.$transaction(async (tx) => {
     const group = await tx.revisionGroup.findFirst({
@@ -315,8 +536,17 @@ export async function publishRevisionGroup(groupId: string) {
     for (const member of data.members) {
       if (member.contentType !== "PERSON_EVENT") continue;
       const personId = resolveEntity(member.payload.person);
-      const { person: _person, evidence: _evidence, ...eventPayload } = member.payload;
-      const created = await tx.personEvent.create({ data: { ...eventPayload, personId } });
+      const created = await tx.personEvent.create({
+        data: {
+          personId,
+          type: member.payload.type,
+          title: member.payload.title,
+          dateLabel: member.payload.dateLabel,
+          location: member.payload.location,
+          description: member.payload.description,
+          sortOrder: member.payload.sortOrder,
+        },
+      });
       resolved.set(member.tempRef, created.id);
       const revisionId = group.members.find((item) => item.tempRef === member.tempRef)!.revisionId;
       publishedByRevision.set(revisionId, created.id);

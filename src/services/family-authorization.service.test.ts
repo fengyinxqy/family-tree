@@ -69,3 +69,21 @@ test("绕过客户端控件不能获得发布权限，停用在下一请求立�
     (error) => error instanceof FamilyAccessError && error.status === 404,
   );
 });
+
+test("协作关键流程端到端角色矩阵保持一致", async () => {
+  const scenarios = [
+    { action: "membership.manage" as const, allowed: ["OWNER", "ADMIN"] },
+    { action: "revision.create" as const, allowed: ["OWNER", "ADMIN", "EDITOR"] },
+    { action: "review.decide" as const, allowed: ["OWNER", "ADMIN", "REVIEWER"] },
+    { action: "publish.manage" as const, allowed: ["OWNER", "ADMIN"] },
+    { action: "ownership.transfer" as const, allowed: ["OWNER"] },
+    { action: "recovery.manage" as const, allowed: ["OWNER"] },
+  ];
+  for (const scenario of scenarios) {
+    for (const role of FAMILY_ROLES) {
+      const request = authorizeFamilyActionWithRepository(repositoryFor(role), `${role.toLowerCase()}-1`, "tree-1", scenario.action);
+      if (scenario.allowed.includes(role)) assert.equal((await request).role, role);
+      else await assert.rejects(request, (error) => error instanceof FamilyAccessError && error.status === 403);
+    }
+  }
+});
